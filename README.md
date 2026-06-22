@@ -55,6 +55,7 @@
 
 - `src/tg_companion_bot/rendering.py` — renderer статусов, итоговых сообщений и кнопок;
 - `src/tg_companion_bot/callbacks.py` — callback-модель `accept/revise/next`;
+- `src/tg_companion_bot/obsidian.py` — persistence layer для записи принятого результата в проектную заметку и журнал решений;
 - `tests/` — TDD-проверки поведения без Telegram token и live polling.
 
 Цель: этот интерфейс должен легко использоваться как стартовый UX/core в других Telegram-ботах с подключёнными агентами Hermes One.
@@ -70,10 +71,11 @@
 - backlog создан;
 - renderer итогового сообщения и кнопок реализован через TDD;
 - callback-модель `accept/revise/next` реализована через TDD;
-- текущая проверка: `11 passed`;
+- Obsidian persistence MVP реализован через TDD;
+- текущая проверка: `14 passed`;
 - отдельный BotFather token пока не подключён;
 - live polling пока не запускался.
 
 ## Следующий технический шаг
 
-Создать Obsidian persistence MVP: после принятия результата писать очищенный итог в проектную заметку и журнал решений.
+Подготовить безопасный live-run plan: entrypoint, config loading, выбор Telegram framework, smoke-test без consuming updates и правила подключения отдельного BotFather token.
