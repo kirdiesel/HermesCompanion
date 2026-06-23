@@ -56,6 +56,11 @@
 - `src/tg_companion_bot/rendering.py` — renderer статусов, итоговых сообщений и кнопок;
 - `src/tg_companion_bot/callbacks.py` — callback-модель `accept/revise/next`;
 - `src/tg_companion_bot/obsidian.py` — persistence layer для записи принятого результата в проектную заметку и журнал решений;
+- `src/tg_companion_bot/live_adapter.py` — framework-neutral live adapter boundary: config, dry-run plan, blockers/risks без consuming updates;
+- `src/tg_companion_bot/live_runtime.py` — framework-neutral runtime glue: incoming message → review render, callback → accept/revise/next, optional Obsidian persistence без polling;
+- `src/tg_companion_bot/telegram_adapter_shell.py` — framework-neutral Telegram payload adapter: `RenderedMessage` → text/reply_markup/callback_data без token и polling;
+- `src/tg_companion_bot/telegram_framework_adapter.py` — concrete Telegram update mapping: Telegram-like dict update → runtime message/callback → payload, без framework import, token и polling;
+- `src/tg_companion_bot/smoke_cli.py` — dry-run CLI: Telegram-like JSON update → runtime → TelegramPayload JSON без token, polling и отправки;
 - `tests/` — TDD-проверки поведения без Telegram token и live polling.
 
 Цель: этот интерфейс должен легко использоваться как стартовый UX/core в других Telegram-ботах с подключёнными агентами Hermes One.
@@ -72,10 +77,16 @@
 - renderer итогового сообщения и кнопок реализован через TDD;
 - callback-модель `accept/revise/next` реализована через TDD;
 - Obsidian persistence MVP реализован через TDD;
-- текущая проверка: `14 passed`;
+- live adapter boundary реализован через TDD в dry-run режиме;
+- live runtime glue реализован через TDD без polling/token;
+- Telegram adapter shell реализован через TDD без token/polling: conversion `RenderedMessage` → Telegram payload/callback data;
+- concrete Telegram framework adapter mapping реализован через TDD без token/polling;
+- smoke-test CLI реализован через TDD: Telegram-like JSON update → runtime → TelegramPayload JSON без token/polling/sending;
+- текущая проверка: `35 passed`;
+- git commit/push обычными дневными шагами не выполняется — git update проекта делает nightly Obsidian optimizer;
 - отдельный BotFather token пока не подключён;
 - live polling пока не запускался.
 
 ## Следующий технический шаг
 
-Подготовить безопасный live-run plan: entrypoint, config loading, выбор Telegram framework, smoke-test без consuming updates и правила подключения отдельного BotFather token.
+Следующий шаг: выбрать Telegram framework-кандидат (`aiogram 3` или `python-telegram-bot`) и описать безопасный live-run plan: token storage, polling conflict check, dry-run smoke before consuming updates.

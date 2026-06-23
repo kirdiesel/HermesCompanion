@@ -20,6 +20,10 @@ class PersistenceResult:
     project_note: Path
     decisions_log: Path
 
+    @property
+    def decision_log(self) -> Path:
+        return self.decisions_log
+
 
 def persist_accepted_result(vault_root: Path | str, result: AcceptedResult) -> PersistenceResult:
     """Persist an accepted task result into an Obsidian project note and decision log.
