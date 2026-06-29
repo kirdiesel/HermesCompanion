@@ -51,3 +51,13 @@ def test_scheduler_wrapper_uses_the_gated_checkpoint_entrypoint():
     assert '$env:NIGHTLY_GIT_ALLOW_WRITE = "1"' in source
     assert "nightly_git_checkpoint.py" in source
     assert "--execute" in source
+
+
+def test_remote_push_required_retries_missing_or_different_remote_head():
+    missing = MODULE.CommandResult(returncode=2, stdout="", stderr="")
+    same = MODULE.CommandResult(returncode=0, stdout="abc123\trefs/heads/main\n", stderr="")
+    different = MODULE.CommandResult(returncode=0, stdout="def456\trefs/heads/main\n", stderr="")
+
+    assert MODULE.remote_push_required("abc123", missing) is True
+    assert MODULE.remote_push_required("abc123", same) is False
+    assert MODULE.remote_push_required("abc123", different) is True

@@ -28,3 +28,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\AIProjects\Bots\tg-co
 ```
 
 Failure is closed: secret scan, compilation, tests, detached HEAD, missing `origin`, commit failure, or push failure returns non-zero and stops the remaining steps.
+
+The script also compares local `HEAD` with `origin/<branch>`. A previously committed but unpushed checkpoint is retried even when the working tree is clean.

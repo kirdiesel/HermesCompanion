@@ -75,6 +75,15 @@ def writes_allowed(*, execute: bool, environment: dict[str, str] | None = None) 
     return execute and env.get("NIGHTLY_GIT_ALLOW_WRITE") == "1"
 
 
+def remote_push_required(local_head: str, remote_result: CommandResult) -> bool:
+    if remote_result.returncode == 2:
+        return True
+    _require_success(remote_result, "git ls-remote")
+    remote_line = remote_result.stdout.strip().splitlines()
+    remote_head = remote_line[0].split()[0] if remote_line else ""
+    return remote_head != local_head
+
+
 def _require_success(result: CommandResult, label: str) -> None:
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
@@ -117,6 +126,13 @@ def run_checkpoint(repo: Path, *, execute: bool, message: str | None = None) -> 
 
     remote_result = run_command(["git", "remote", "get-url", "origin"], cwd=repo)
     _require_success(remote_result, "git remote origin")
+    head_result = run_command(["git", "rev-parse", "HEAD"], cwd=repo)
+    _require_success(head_result, "git rev-parse HEAD")
+    remote_head_result = run_command(
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", branch],
+        cwd=repo,
+    )
+    needs_push = remote_push_required(head_result.stdout.strip(), remote_head_result)
 
     result: dict[str, object] = {
         "ok": True,
@@ -126,10 +142,11 @@ def run_checkpoint(repo: Path, *, execute: bool, message: str | None = None) -> 
         "changed_paths": changed_paths,
         "checks": {"secret_scan": "passed", "py_compile": "passed", "pytest": "passed"},
         "would_commit": bool(changed_paths),
-        "would_push": bool(changed_paths),
+        "would_push": bool(changed_paths) or needs_push,
+        "unpushed_head": needs_push,
     }
 
-    if not changed_paths or not execute:
+    if not execute:
         return result
     if not writes_allowed(execute=True):
         result.update(
@@ -141,21 +158,27 @@ def run_checkpoint(repo: Path, *, execute: bool, message: str | None = None) -> 
         )
         return result
 
-    add_result = run_command(["git", "add", "--all"], cwd=repo)
-    _require_success(add_result, "git add")
-    staged_result = run_command(["git", "diff", "--cached", "--quiet"], cwd=repo)
-    if staged_result.returncode == 0:
-        result.update({"committed": False, "pushed": False, "detail": "no staged changes"})
-        return result
-    if staged_result.returncode != 1:
-        _require_success(staged_result, "git diff --cached")
+    committed = False
+    commit_message = None
+    if changed_paths:
+        add_result = run_command(["git", "add", "--all"], cwd=repo)
+        _require_success(add_result, "git add")
+        staged_result = run_command(["git", "diff", "--cached", "--quiet"], cwd=repo)
+        if staged_result.returncode == 1:
+            commit_message = message or f"chore: nightly checkpoint {datetime.now().date().isoformat()}"
+            commit_result = run_command(["git", "commit", "-m", commit_message], cwd=repo)
+            _require_success(commit_result, "git commit")
+            committed = True
+        elif staged_result.returncode != 0:
+            _require_success(staged_result, "git diff --cached")
 
-    commit_message = message or f"chore: nightly checkpoint {datetime.now().date().isoformat()}"
-    commit_result = run_command(["git", "commit", "-m", commit_message], cwd=repo)
-    _require_success(commit_result, "git commit")
-    push_result = run_command(["git", "push", "--set-upstream", "origin", branch], cwd=repo)
-    _require_success(push_result, "git push")
-    result.update({"committed": True, "pushed": True, "commit_message": commit_message})
+    should_push = committed or needs_push
+    if should_push:
+        push_result = run_command(["git", "push", "--set-upstream", "origin", branch], cwd=repo)
+        _require_success(push_result, "git push")
+    result.update({"committed": committed, "pushed": should_push})
+    if commit_message is not None:
+        result["commit_message"] = commit_message
     return result
 
 

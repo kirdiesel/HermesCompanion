@@ -288,7 +288,7 @@ Safety plan до live polling:
 - оставлять безопасный отказ для неизвестных/устаревших/конфликтующих кнопок;
 - не требовать BotFather token, polling и отправку сообщений.
 
-Проверка: `73 passed`.
+Проверка: `74 passed`.
 
 ### done — подготовить Hermes gateway boundary
 

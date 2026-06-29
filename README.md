@@ -96,7 +96,7 @@
 - callback `attention:<id>:<option>` сохраняет решение, убирает кнопки, блокирует stale/conflicting callbacks и идемпотентно обрабатывает повтор;
 - Hermes gateway boundary использует уже существующий live metadata-контракт `completion_feedback/task_final` без второго polling consumer;
 - nightly Git checkpoint подготовлен и прошёл dry-run, но внешний scheduler и первый push ещё не разрешены;
-- текущая проверка: `73 passed`;
+- текущая проверка: `74 passed`;
 - отдельный BotFather token пока не подключён;
 - live polling пока не запускался.
 
