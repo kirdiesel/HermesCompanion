@@ -58,7 +58,7 @@ def adapt_callback_query_update(update: Dict[str, Any]) -> Optional[CallbackQuer
         return None
 
     data = callback_query.get("data")
-    if not isinstance(data, str) or not data.startswith("companion:"):
+    if not isinstance(data, str) or not data.startswith(("companion:", "attention:")):
         return None
 
     message = callback_query.get("message") or {}

@@ -4,6 +4,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
 
+from .attention_items import (
+    AttentionDecisionRecord,
+    AttentionItem,
+    AttentionPayload,
+    apply_attention_decision,
+    decision_record_from_result,
+    parse_attention_callback_data,
+    recorded_decision_payload,
+)
 from .callbacks import CallbackAction, CallbackResult, handle_callback, parse_callback_data
 from .obsidian import AcceptedResult, PersistenceResult, persist_accepted_result
 from .rendering import RenderRequest, RenderedMessage, render_message
@@ -27,6 +36,8 @@ class PendingResult:
 class RuntimeState:
     obsidian_root: Optional[Path] = None
     pending_results: Dict[str, PendingResult] = field(default_factory=dict)
+    pending_attention_items: Dict[str, AttentionItem] = field(default_factory=dict)
+    attention_decisions: Dict[str, AttentionDecisionRecord] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -41,6 +52,17 @@ class RuntimeCallbackResult:
     rendered: Optional[RenderedMessage] = None
     follow_up: str = ""
     persistence: Optional[PersistenceResult] = None
+
+
+@dataclass(frozen=True)
+class RuntimeAttentionCallbackResult:
+    ok: bool
+    status: str
+    error: Optional[str] = None
+    applied: bool = False
+    duplicate: bool = False
+    record: Optional[AttentionDecisionRecord] = None
+    payload: Optional[AttentionPayload] = None
 
 
 def handle_incoming_message(message: IncomingMessage, *, state: RuntimeState) -> RuntimeMessageResult:
@@ -118,4 +140,50 @@ def handle_runtime_callback(
     return RuntimeCallbackResult(
         action=decision.action,
         follow_up=callback_result.user_message,
+    )
+
+
+def handle_runtime_attention_callback(
+    callback_data: str,
+    *,
+    state: RuntimeState,
+) -> RuntimeAttentionCallbackResult:
+    decision = parse_attention_callback_data(callback_data)
+    if decision is None:
+        return RuntimeAttentionCallbackResult(ok=False, status="invalid", error="invalid_attention_callback")
+
+    existing = state.attention_decisions.get(decision.attention_id)
+    if existing is not None:
+        duplicate = existing.option_id == decision.option_id
+        return RuntimeAttentionCallbackResult(
+            ok=duplicate,
+            status="duplicate" if duplicate else "conflict",
+            error=None if duplicate else "attention_already_resolved",
+            duplicate=duplicate,
+            record=existing,
+            payload=recorded_decision_payload(existing, duplicate=duplicate),
+        )
+
+    item = state.pending_attention_items.get(decision.attention_id)
+    if item is None:
+        return RuntimeAttentionCallbackResult(ok=False, status="stale", error="stale_attention_callback")
+
+    applied = apply_attention_decision(item, decision.option_id)
+    if not applied.applied:
+        return RuntimeAttentionCallbackResult(
+            ok=False,
+            status="unknown_option",
+            error="unknown_attention_option",
+            payload=applied.payload,
+        )
+
+    record = decision_record_from_result(item, applied)
+    state.pending_attention_items.pop(item.attention_id, None)
+    state.attention_decisions[item.attention_id] = record
+    return RuntimeAttentionCallbackResult(
+        ok=True,
+        status="applied",
+        applied=True,
+        record=record,
+        payload=applied.payload,
     )

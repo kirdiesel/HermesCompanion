@@ -378,12 +378,42 @@ Backlog проекта:
 
 ---
 
+### 8. `smoke_cli.py`
+
+Файл:
+
+`src/tg_companion_bot/smoke_cli.py`
+
+Отвечает за полный dry-run цикл из командной строки:
+
+- Telegram-like message update → runtime → Telegram payload JSON;
+- Windows-safe stdout JSON через `ensure_ascii=True`;
+- callback query update `companion:accept/revise/next:<id>`;
+- `--state <path>` для сохранения минимального pending result между запусками;
+- `--obsidian-root <path>` для записи принятого результата только в test vault;
+- понятная ошибка `invalid_state` для повреждённого state file;
+- safety-флаги `requires_token=False`, `consumes_updates=False`, `sends_messages=False` во всех ветках output.
+
+Важно:
+
+- CLI не требует BotFather token;
+- не запускает polling;
+- не consuming updates;
+- не отправляет реальные Telegram-сообщения;
+- запись в настоящий `C:\AIProjects\Obsidian\One` из smoke CLI заблокирована без отдельного подтверждения.
+
+Покрыто тестами:
+
+`tests/test_smoke_cli.py`
+
+---
+
 ## Текущий test status
 
 Последний зафиксированный результат:
 
 ```text
-32 passed
+73 passed
 ```
 
 То есть на текущем этапе все тесты проекта проходили.
@@ -405,6 +435,12 @@ Backlog проекта:
 - runtime glue;
 - Telegram payload shell;
 - framework-neutral adapter mapping;
+- full smoke CLI pipeline message → payload → callback accept/revise/next → state → temp Obsidian persistence;
+- idempotent attention decision callbacks with persisted state;
+- deterministic nightly Git checkpoint dry-run without LLM;
+- no-network Hermes gateway action-plan boundary using the existing completion feedback contract;
+- framework-кандидат `aiogram 3`;
+- безопасный live-run plan и install/config dry-run без реального token.
 - тестовое покрытие всех этих слоёв.
 
 То есть уже создана основа, которую можно использовать не только для бота-компаньона, но и как стартовый интерфейс для других Hermes One Telegram-агентов.
@@ -418,11 +454,11 @@ Backlog проекта:
 - не подключён BotFather token;
 - не создан `.env` с реальным token;
 - не запущен live polling;
-- не выбран окончательно live Telegram framework;
+- live Telegram framework-кандидат выбран (`aiogram 3`), но live adapter skeleton ещё не подключён к реальному polling;
 - не отправляются реальные Telegram-сообщения;
 - не consuming updates;
 - не настроен отдельный production service;
-- не сделан GitHub remote/push вручную;
+- GitHub remote настроен, но push не выполнялся в дневном рабочем цикле;
 - не подключена реальная авторизация к Telegram API отдельного бота.
 
 Это осознанное ограничение: проект пока развивается в безопасном dry-run/TDD режиме.
@@ -437,17 +473,18 @@ Backlog проекта:
 
 - обновления `README.md`;
 - обновления `BACKLOG.md`;
-- изменение `obsidian.py`;
+- обновления `PROJECT_STATUS_SUMMARY.md`;
+- обновление `smoke_cli.py`;
 - новые модули:
-  - `live_adapter.py`
-  - `live_runtime.py`
-  - `telegram_adapter_shell.py`
-  - `telegram_framework_adapter.py`
+  - `live_run_plan.py`
 - новые тесты:
-  - `test_live_adapter.py`
-  - `test_live_runtime.py`
-  - `test_telegram_adapter_shell.py`
-  - `test_telegram_framework_adapter.py`
+  - `test_live_run_plan.py`
+  - `test_aiogram_config_assets.py`
+- новые config/runbook артефакты:
+  - `.env.example`
+  - `requirements.txt`
+  - `docs/live_run_aiogram3.md`
+- расширение `tests/test_smoke_cli.py` до полного dry-run callback pipeline.
 
 Они должны быть обработаны ночной оптимизацией Obsidian/git.
 
@@ -497,64 +534,54 @@ Backlog проекта:
 
 ### Ближайшая задача
 
-Сделать **smoke-test CLI** без token и polling:
+Подключить проверенный boundary к **существующему Hermes gateway** без второго polling consumer:
 
 ```text
-Telegram-like JSON update
-→ adapter implementation
-→ runtime
-→ TelegramPayload JSON
+Hermes final/progress event
+→ companion runtime
+→ send/edit/callback action plan
+→ existing Hermes Telegram adapter
 ```
 
 Цель:
 
-- получить проверяемый dry-run запуск из командной строки;
-- убедиться, что весь pipeline работает без Telegram live mode;
-- подготовить почву для будущего live adapter.
+- использовать уже реализованные Hermes completion buttons;
+- не запускать второй polling consumer;
+- подключить attention reply markup/callback boundary;
+- сохранить single-chat/user gate.
 
 ---
 
 ### Следующие задачи
 
-1. **Smoke-test CLI**
-   - вход: JSON update;
-   - выход: Telegram payload JSON;
-   - без token;
-   - без polling;
-   - без отправки сообщений.
-
-2. **Выбор live Telegram framework**
-   - `aiogram` или `python-telegram-bot`;
-   - только после dry-run проверки.
-
-3. **Adapter implementation**
+1. **Adapter implementation**
    - handler incoming messages;
    - handler callback queries;
    - conversion payload → framework-specific send/edit calls.
 
-4. **Безопасный live-run plan**
-   - проверить конфликт polling;
+2. **Безопасный live smoke gate**
+   - повторно проверить конфликт polling;
    - проверить token leakage;
-   - проверить режим dry-run;
+   - подтвердить режим dry-run;
    - подготовить инструкции запуска.
 
-5. **BotFather token**
+3. **BotFather token**
    - только после отдельного подтверждения;
    - не хранить в коде;
    - использовать `.env` / local config.
 
-6. **Live smoke**
+4. **Live smoke**
    - запустить не production, а ограниченный тест;
    - проверить одно входящее сообщение;
    - проверить итог с кнопками;
    - проверить accept/revise/next.
 
-7. **Интеграция с Obsidian**
+5. **Интеграция с настоящим Obsidian Vault**
    - проверить реальную запись принятого результата;
    - проверить журнал решений;
    - проверить отсутствие сырого шума.
 
-8. **Переиспользуемый template**
+6. **Переиспользуемый template**
    - оформить core как стартовый интерфейс для других агентов Hermes One.
 
 ---
@@ -580,7 +607,7 @@ MVP можно считать готовым, когда:
 
 Проект `tg-companion-bot` сейчас находится в состоянии:
 
-> **reusable Telegram-agent interface core почти собран и покрыт тестами; live Telegram запуск ещё намеренно не включался.**
+> **dry-run MVP для message → payload → callback accept/revise/next → state → temp Obsidian persistence собран и покрыт тестами; live Telegram запуск ещё намеренно не включался.**
 
 Уже есть проверяемая цепочка:
 
@@ -591,8 +618,10 @@ rendering
 → live runtime
 → Telegram payload shell
 → framework-neutral adapter mapping
+→ smoke CLI full dry-run callback pipeline
+→ Hermes gateway action-plan boundary
 ```
 
 Следующий лучший шаг:
 
-> сделать CLI smoke-test для полного dry-run pipeline без token/polling.
+> после подтверждения зарегистрировать nightly Git scheduler/первый push и интегрировать boundary в установленный Hermes gateway.

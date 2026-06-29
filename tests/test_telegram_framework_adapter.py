@@ -71,3 +71,18 @@ def test_adapt_callback_query_update_maps_callback_without_framework_dependency(
 
 def test_adapt_callback_query_update_rejects_unknown_prefix():
     assert adapt_callback_query_update({"callback_query": {"id": "abc", "data": "other:accept:1"}}) is None
+
+
+def test_adapt_callback_query_update_accepts_attention_namespace():
+    update = {
+        "callback_query": {
+            "id": "attention-cb",
+            "data": "attention:review-1:keep",
+            "message": {"message_id": 90, "chat": {"id": 555}},
+        }
+    }
+
+    callback = adapt_callback_query_update(update)
+
+    assert callback is not None
+    assert callback.callback_data == "attention:review-1:keep"
