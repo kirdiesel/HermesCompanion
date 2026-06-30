@@ -306,11 +306,11 @@ Boundary использует существующий Hermes `completion_feedba
 
 ### done — подготовить token-independent nightly Git checkpoint
 
-Созданы скрипт, тесты и runbook. Dry-run проходит secret scan, компиляцию и полный pytest. Commit/push закрыты двойным gate и не выполнялись.
+Созданы скрипт, тесты и runbook. Dry-run проходит secret scan, компиляцию и полный pytest. Commit/push закрыты двойным gate: `--execute` плюс `NIGHTLY_GIT_ALLOW_WRITE=1`.
 
-### review — зарегистрировать ночное git-обновление проекта
+### done — зарегистрировать ночное git-обновление проекта
 
-Требует подтверждения на изменение scheduler и первый push. Obsidian optimizer больше не должен отвечать за git этого проекта.
+После подтверждения зарегистрирована отдельная Windows Task Scheduler задача `HermesCompanion Nightly Git Checkpoint`. Первый push выполнен в `origin/main`; Obsidian optimizer больше не отвечает за git этого проекта.
 
 ### todo — создать отдельный Telegram-бот через BotFather
 

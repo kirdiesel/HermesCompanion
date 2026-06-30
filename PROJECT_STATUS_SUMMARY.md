@@ -120,11 +120,23 @@
 
 `863d076 Add Obsidian persistence MVP`
 
-После этого введено новое правило:
+Затем добавлены коммиты:
 
-> git commit/push днём не делать; git обновляет только ночная оптимизация Obsidian.
+- `edb8c9b Add safe Telegram live adapter dry-run layer`
+- `f56409e feat: complete companion interaction callbacks and Hermes gateway boundary`
+- `7ade46e fix: retry unpushed nightly checkpoints`
 
-Поэтому текущие новые изменения лежат локально и ждут ночного optimizer-а.
+Текущий remote:
+
+`https://github.com/kirdiesel/HermesCompanion.git`
+
+После подтверждения зарегистрирована отдельная Windows Task Scheduler задача `HermesCompanion Nightly Git Checkpoint`, а `origin/main` синхронизирован с локальным `main`.
+
+После этого действует правило:
+
+> git commit/push днём не делать без отдельного подтверждения; штатное git-обновление проекта выполняет отдельный nightly Git checkpoint, а не Obsidian-аудит.
+
+Последний синхронизированный git-снимок после проверки: `main` синхронизирован с `origin/main` на `7ade46e`.
 
 ---
 
@@ -458,35 +470,25 @@ Backlog проекта:
 - не отправляются реальные Telegram-сообщения;
 - не consuming updates;
 - не настроен отдельный production service;
-- GitHub remote настроен, но push не выполнялся в дневном рабочем цикле;
+- GitHub remote настроен, первый push выполнен через подтверждённый nightly checkpoint flow;
 - не подключена реальная авторизация к Telegram API отдельного бота.
 
 Это осознанное ограничение: проект пока развивается в безопасном dry-run/TDD режиме.
 
 ---
 
-## Текущие незакоммиченные изменения
+## Git-снимок
 
-После введения правила “git обновляет ночная оптимизация” новые изменения не коммитились вручную.
+После отделения nightly Git checkpoint от Obsidian-аудита изменения проекта больше не ждут LLM-аудита Obsidian.
 
-В статусе были дневные незакоммиченные изменения примерно такого состава:
+Последнее подтверждённое синхронизированное состояние:
 
-- обновления `README.md`;
-- обновления `BACKLOG.md`;
-- обновления `PROJECT_STATUS_SUMMARY.md`;
-- обновление `smoke_cli.py`;
-- новые модули:
-  - `live_run_plan.py`
-- новые тесты:
-  - `test_live_run_plan.py`
-  - `test_aiogram_config_assets.py`
-- новые config/runbook артефакты:
-  - `.env.example`
-  - `requirements.txt`
-  - `docs/live_run_aiogram3.md`
-- расширение `tests/test_smoke_cli.py` до полного dry-run callback pipeline.
+- ветка: `main`;
+- remote: `origin https://github.com/kirdiesel/HermesCompanion.git`;
+- `origin/main` указывает на `7ade46e`;
+- Windows scheduler задача `HermesCompanion Nightly Git Checkpoint` зарегистрирована и готова к следующему запуску.
 
-Они должны быть обработаны ночной оптимизацией Obsidian/git.
+Текущие локальные изменения после этого снимка: только статусные markdown-правки в `README.md`, `BACKLOG.md` и `PROJECT_STATUS_SUMMARY.md`. Они не требуют Telegram token, live polling или credentials и должны быть обработаны следующим подтверждённым nightly Git checkpoint.
 
 ---
 
@@ -519,14 +521,22 @@ Backlog проекта:
 
 - ночью перетряхивать структуру Obsidian;
 - оптимизировать vault под логичную 3D-графовую схему;
-- проверять проект `tg-companion-bot`;
-- запускать тесты;
-- при зелёных тестах и безопасном состоянии делать git update;
 - спорные изменения выносить в `🔎 приёмка`.
+
+Git проекта вынесен в отдельную deterministic задачу:
+
+`HermesCompanion Nightly Git Checkpoint`
+
+Её роль:
+
+- проверять `tg-companion-bot` без LLM;
+- запускать secret scan, `py_compile` и полный `pytest`;
+- выполнять commit/push только при двойном write-gate;
+- повторять push ранее созданного, но не отправленного commit даже при чистом working tree.
 
 Правило:
 
-> в дневных рабочих циклах код можно менять и тестировать, но commit/push не делать.
+> в дневных рабочих циклах код можно менять и тестировать, но commit/push и cron/scheduler changes делать только после отдельного подтверждения.
 
 ---
 
@@ -624,4 +634,4 @@ rendering
 
 Следующий лучший шаг:
 
-> после подтверждения зарегистрировать nightly Git scheduler/первый push и интегрировать boundary в установленный Hermes gateway.
+> после отдельного подтверждения на изменение установленного Hermes gateway интегрировать проверенный boundary без запуска второго polling consumer.

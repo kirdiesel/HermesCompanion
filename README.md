@@ -95,11 +95,11 @@
 - `smoke_cli.py` интегрирован с `attention_items`: report JSON с `attention_items` превращается в последовательность Telegram-ready payloads, по одному сообщению на каждый `🔴` пункт;
 - callback `attention:<id>:<option>` сохраняет решение, убирает кнопки, блокирует stale/conflicting callbacks и идемпотентно обрабатывает повтор;
 - Hermes gateway boundary использует уже существующий live metadata-контракт `completion_feedback/task_final` без второго polling consumer;
-- nightly Git checkpoint подготовлен и прошёл dry-run, но внешний scheduler и первый push ещё не разрешены;
+- nightly Git checkpoint отделён от Obsidian-аудита, прошёл dry-run, зарегистрирован в Windows Task Scheduler и синхронизирован с `origin/main`;
 - текущая проверка: `74 passed`;
 - отдельный BotFather token пока не подключён;
 - live polling пока не запускался.
 
 ## Следующий технический шаг
 
-Следующий шаг: после отдельного подтверждения зарегистрировать nightly Git scheduler/выполнить первый push и подключить проверенный boundary к установленному Hermes gateway без запуска второго polling consumer.
+Следующий шаг: после отдельного подтверждения на изменение установленного Hermes gateway подключить проверенный boundary к существующему gateway без запуска второго polling consumer.
