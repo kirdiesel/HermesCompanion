@@ -1,5 +1,7 @@
 # Текущий контекст проекта `tg-companion-bot`
 
+Статус обновлён: `2026-07-02`.
+
 Проект:
 
 `C:\AIProjects\Bots\tg-companion-bot`
@@ -125,6 +127,7 @@
 - `edb8c9b Add safe Telegram live adapter dry-run layer`
 - `f56409e feat: complete companion interaction callbacks and Hermes gateway boundary`
 - `7ade46e fix: retry unpushed nightly checkpoints`
+- `efbca13 chore: nightly checkpoint 2026-06-30`
 
 Текущий remote:
 
@@ -136,7 +139,7 @@
 
 > git commit/push днём не делать без отдельного подтверждения; штатное git-обновление проекта выполняет отдельный nightly Git checkpoint, а не Obsidian-аудит.
 
-Последний синхронизированный git-снимок после проверки: `main` синхронизирован с `origin/main` на `7ade46e`.
+Последний синхронизированный git-снимок после проверки: `main` синхронизирован с `origin/main` на `efbca13`.
 
 ---
 
@@ -258,12 +261,15 @@ Backlog проекта:
 
 `src/tg_companion_bot/obsidian.py`
 
-Отвечает за запись принятого результата в Obsidian.
+Отвечает за запись принятого результата в Obsidian с учётом параллельных writers.
 
-Пишет:
+Пишет только в собственный namespace:
 
-- проектную заметку `_index.md`;
-- `Журнал решений.md`.
+- `_tg-companion/Текущий результат.md`;
+- `_tg-companion/Журнал решений.md`;
+- immutable `_tg-companion/Решения/<event_id>.md`.
+
+Не изменяет daily notes, context-bot `<project>.md`, generic `_index.md` и root `Журнал решений.md`. Запись использует idempotency key, OS file lock и atomic replace.
 
 Принцип:
 
@@ -420,12 +426,34 @@ Backlog проекта:
 
 ---
 
+### 9. `state_codec.py` и `runtime_state_store.py`
+
+Файлы:
+
+- `src/tg_companion_bot/state_codec.py`;
+- `src/tg_companion_bot/runtime_state_store.py`.
+
+Готовят restart-safe state для live Hermes bridge:
+
+- единый schema-versioned codec для pending results и attention state;
+- SQLite вне Vault/Git;
+- WAL и `BEGIN IMMEDIATE` для конкурентных callbacks;
+- rollback при ошибке;
+- commit только при реальном изменении state;
+- persisted wrappers для Hermes events и attention items.
+
+Покрыто тестами:
+
+`tests/test_runtime_state_store.py`
+
+---
+
 ## Текущий test status
 
 Последний зафиксированный результат:
 
 ```text
-74 passed
+90 passed
 ```
 
 То есть на текущем этапе все тесты проекта проходили.
@@ -443,6 +471,7 @@ Backlog проекта:
 - renderer сообщений;
 - модель callback-ов;
 - запись принятого результата в Obsidian;
+- multi-writer-safe ownership namespace для совместной работы с `tg-context-bot` и другими Vault writers;
 - dry-run live adapter;
 - runtime glue;
 - Telegram payload shell;
@@ -451,6 +480,8 @@ Backlog проекта:
 - idempotent attention decision callbacks with persisted state;
 - deterministic nightly Git checkpoint dry-run without LLM;
 - no-network Hermes gateway action-plan boundary using the existing completion feedback contract;
+- transactional SQLite runtime state boundary with restart recovery and concurrent callback serialization;
+- installed opt-in Hermes Telegram companion bridge with durable `fb:*` callback idempotency and accepted restart smoke without Obsidian write;
 - framework-кандидат `aiogram 3`;
 - безопасный live-run plan и install/config dry-run без реального token.
 - тестовое покрытие всех этих слоёв.
@@ -485,10 +516,13 @@ Backlog проекта:
 
 - ветка: `main`;
 - remote: `origin https://github.com/kirdiesel/HermesCompanion.git`;
-- `origin/main` указывает на `7ade46e`;
-- Windows scheduler задача `HermesCompanion Nightly Git Checkpoint` зарегистрирована и готова к следующему запуску.
+- `origin/main` указывает на `efbca13`;
+- рабочее дерево чистое перед текущим обновлением статуса;
+- Windows scheduler задача `HermesCompanion Nightly Git Checkpoint` зарегистрирована и находится в состоянии `Ready`;
+- последний запуск: `2026-07-02 03:30`, результат `0`, пропущенных запусков нет;
+- следующий запуск: `2026-07-03 03:30`.
 
-Текущие локальные изменения после этого снимка: только статусные markdown-правки в `README.md`, `BACKLOG.md` и `PROJECT_STATUS_SUMMARY.md`. Они не требуют Telegram token, live polling или credentials и должны быть обработаны следующим подтверждённым nightly Git checkpoint.
+Ночной запуск `2026-06-30` закоммитил и отправил статусные markdown-правки. Запуски `2026-07-01` и `2026-07-02` подтвердили чистое дерево и не создавали лишних коммитов.
 
 ---
 
@@ -544,7 +578,7 @@ Git проекта вынесен в отдельную deterministic задач
 
 ### Ближайшая задача
 
-Подключить проверенный boundary к **существующему Hermes gateway** без второго polling consumer:
+Провести single-chat live smoke подключённого boundary через **существующий Hermes gateway** без второго polling consumer и без real-Vault write:
 
 ```text
 Hermes final/progress event
@@ -553,46 +587,41 @@ Hermes final/progress event
 → existing Hermes Telegram adapter
 ```
 
-Цель:
+Текущее состояние:
 
 - использовать уже реализованные Hermes completion buttons;
 - не запускать второй polling consumer;
-- подключить attention reply markup/callback boundary;
-- сохранить single-chat/user gate.
+- durable bridge установлен и Gateway перезапущен;
+- Telegram polling подключён;
+- duplicate/conflicting callbacks защищены SQLite state;
+- live `accept` smoke пройден через восстановление без in-memory state;
+- real-Vault writes выключены до отдельной приёмки.
 
 ---
 
 ### Следующие задачи
 
-1. **Adapter implementation**
-   - handler incoming messages;
-   - handler callback queries;
-   - conversion payload → framework-specific send/edit calls.
+1. **Завершить single-chat live smoke без Vault write**
+   - `accept` уже проверен через restart-fallback path;
+   - проверить отдельные результаты для `revise` и `next`;
+   - подтвердить отсутствие повторного agent dispatch после duplicate callback;
+   - проверить state после restart.
 
-2. **Безопасный live smoke gate**
-   - повторно проверить конфликт polling;
-   - проверить token leakage;
-   - подтвердить режим dry-run;
-   - подготовить инструкции запуска.
-
-3. **BotFather token**
-   - только после отдельного подтверждения;
-   - не хранить в коде;
-   - использовать `.env` / local config.
-
-4. **Live smoke**
-   - запустить не production, а ограниченный тест;
-   - проверить одно входящее сообщение;
-   - проверить итог с кнопками;
-   - проверить accept/revise/next.
-
-5. **Интеграция с настоящим Obsidian Vault**
+2. **Интеграция с настоящим Obsidian Vault**
    - проверить реальную запись принятого результата;
    - проверить журнал решений;
    - проверить отсутствие сырого шума.
 
-6. **Переиспользуемый template**
+3. **Live attention flow**
+   - подключить последовательную выдачу `attention_items`;
+   - проверить кнопки решения и исчезновение keyboard;
+   - сохранить weekly reminder policy.
+
+4. **Переиспользуемый template**
    - оформить core как стартовый интерфейс для других агентов Hermes One.
+
+5. **Delivery outbox (после MVP)**
+   - повторять Telegram action после post-commit API failure без повторного применения решения.
 
 ---
 
@@ -617,7 +646,7 @@ MVP можно считать готовым, когда:
 
 Проект `tg-companion-bot` сейчас находится в состоянии:
 
-> **dry-run MVP для message → payload → callback accept/revise/next → state → temp Obsidian persistence собран и покрыт тестами; live Telegram запуск ещё намеренно не включался.**
+> **reusable core, multi-writer-safe Obsidian persistence и durable SQLite state покрыты тестами; companion bridge установлен в работающий Hermes Gateway, live `accept` smoke пройден, а `revise`/`next` и real-Vault write ещё не выполнялись.**
 
 Уже есть проверяемая цепочка:
 
@@ -630,8 +659,9 @@ rendering
 → framework-neutral adapter mapping
 → smoke CLI full dry-run callback pipeline
 → Hermes gateway action-plan boundary
+→ installed durable Hermes companion bridge
 ```
 
 Следующий лучший шаг:
 
-> после отдельного подтверждения на изменение установленного Hermes gateway интегрировать проверенный boundary без запуска второго polling consumer.
+> завершить live smoke для `revise` и `next`, затем отдельной приёмкой проверить одну real-Vault запись.

@@ -383,8 +383,11 @@ def test_callback_accept_with_obsidian_root_writes_to_temp_vault(tmp_path):
     assert_safety_flags(payload)
     assert payload["persistence"] is not None
     created_files = [Path(path) for path in payload["created_files"]]
-    assert created_files
+    assert len(created_files) == 3
     assert all(path.exists() for path in created_files)
+    assert payload["persistence"]["event_id"] == "101"
+    assert payload["persistence"]["duplicate"] is False
+    assert "_tg-companion" in created_files[0].parts
     assert "Итог для записи в Obsidian" in created_files[0].read_text(encoding="utf-8")
     assert read_state(state_path)["pending_results"] == {}
 

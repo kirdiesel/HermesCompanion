@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 from .attention_items import AttentionItem, attention_item_to_telegram_payload
 from .callbacks import handle_callback
 from .live_runtime import (
     IncomingMessage,
+    RuntimeCallbackResult,
     RuntimeState,
     handle_incoming_message,
     handle_runtime_attention_callback,
     handle_runtime_callback,
 )
+from .runtime_state_store import SQLiteRuntimeStateStore
 
 
 @dataclass(frozen=True)
@@ -170,9 +173,12 @@ def plan_hermes_event(
             metadata={
                 "companion_callback": True,
                 "companion_action": runtime.action.value if runtime.action is not None else None,
+                "companion_applied": runtime.applied,
+                "companion_duplicate": runtime.duplicate,
+                "companion_error": runtime.error,
             },
         )
-        return HermesActionPlan(ok=True, actions=actions)
+        return HermesActionPlan(ok=runtime.error is None, actions=actions, error=runtime.error)
 
     return HermesActionPlan(ok=False, error="unsupported_callback")
 
@@ -199,3 +205,67 @@ def plan_attention_item(
             ),
         ),
     )
+
+
+def plan_persisted_hermes_event(
+    event: HermesInboundEvent,
+    *,
+    store: SQLiteRuntimeStateStore,
+    allowed_chat_id: str,
+    allowed_user_id: Optional[str] = None,
+    obsidian_root: Path | str | None = None,
+) -> HermesActionPlan:
+    """Plan one Hermes event and atomically persist any resulting state change."""
+
+    with store.transaction(obsidian_root=obsidian_root) as state:
+        return plan_hermes_event(
+            event,
+            state=state,
+            allowed_chat_id=allowed_chat_id,
+            allowed_user_id=allowed_user_id,
+        )
+
+
+def plan_persisted_attention_item(
+    item: AttentionItem,
+    *,
+    chat_id: str,
+    store: SQLiteRuntimeStateStore,
+) -> HermesActionPlan:
+    """Plan one attention item and persist it before the Gateway sends actions."""
+
+    with store.transaction() as state:
+        return plan_attention_item(item, chat_id=chat_id, state=state)
+
+
+def apply_persisted_completion_feedback(
+    *,
+    action: str,
+    chat_id: str,
+    message_id: str,
+    result_text: str,
+    store: SQLiteRuntimeStateStore,
+    project: str = "Inbox",
+    recommendation: Optional[str] = None,
+    obsidian_root: Path | str | None = None,
+) -> RuntimeCallbackResult:
+    """Map an existing Hermes `fb:*` button to durable companion state."""
+
+    task_id = f"telegram-{chat_id}-{message_id}"
+    callback_data = f"companion:{action}:{task_id}"
+    with store.transaction(obsidian_root=obsidian_root) as state:
+        if task_id not in state.pending_results and task_id not in state.companion_decisions:
+            handle_incoming_message(
+                IncomingMessage(
+                    chat_id=str(chat_id),
+                    message_id=task_id,
+                    text=result_text,
+                ),
+                state=state,
+            )
+        return handle_runtime_callback(
+            callback_data,
+            state=state,
+            project=project,
+            recommendation=recommendation,
+        )

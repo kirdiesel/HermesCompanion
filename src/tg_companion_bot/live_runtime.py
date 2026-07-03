@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -32,10 +33,19 @@ class PendingResult:
     summary: str
 
 
+@dataclass(frozen=True)
+class CompanionDecisionRecord:
+    task_id: str
+    action: str
+    status: str
+    follow_up: str
+
+
 @dataclass
 class RuntimeState:
     obsidian_root: Optional[Path] = None
     pending_results: Dict[str, PendingResult] = field(default_factory=dict)
+    companion_decisions: Dict[str, CompanionDecisionRecord] = field(default_factory=dict)
     pending_attention_items: Dict[str, AttentionItem] = field(default_factory=dict)
     attention_decisions: Dict[str, AttentionDecisionRecord] = field(default_factory=dict)
 
@@ -52,6 +62,10 @@ class RuntimeCallbackResult:
     rendered: Optional[RenderedMessage] = None
     follow_up: str = ""
     persistence: Optional[PersistenceResult] = None
+    applied: bool = False
+    duplicate: bool = False
+    error: Optional[str] = None
+    record: Optional[CompanionDecisionRecord] = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +113,17 @@ def handle_runtime_callback(
     if decision is None:
         return RuntimeCallbackResult(action=None, follow_up="Ничего не изменено.")
 
+    existing = state.companion_decisions.get(decision.task_id)
+    if existing is not None:
+        duplicate = existing.action == decision.action.value
+        return RuntimeCallbackResult(
+            action=decision.action,
+            follow_up=existing.follow_up,
+            duplicate=duplicate,
+            error=None if duplicate else "companion_result_already_resolved",
+            record=existing,
+        )
+
     pending = state.pending_results.get(decision.task_id)
     callback_result: CallbackResult = handle_callback(
         callback_data,
@@ -115,15 +140,25 @@ def handle_runtime_callback(
                     title="Принятый результат",
                     summary=pending.summary,
                     next_step=recommendation or callback_result.user_message,
-                    accepted_at="runtime",
+                    accepted_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                     artifacts=[],
+                    event_id=decision.task_id,
                 ),
             )
         state.pending_results.pop(decision.task_id, None)
+        record = CompanionDecisionRecord(
+            task_id=decision.task_id,
+            action=decision.action.value,
+            status=callback_result.status or "",
+            follow_up=recommendation or callback_result.user_message,
+        )
+        state.companion_decisions[decision.task_id] = record
         return RuntimeCallbackResult(
             action=decision.action,
             follow_up=recommendation or callback_result.user_message,
             persistence=persistence,
+            applied=True,
+            record=record,
         )
 
     if decision.action == CallbackAction.REVISE:
@@ -131,15 +166,33 @@ def handle_runtime_callback(
         rendered = render_message(
             RenderRequest(kind="progress", title="Доработка", done=[text])
         )
+        record = CompanionDecisionRecord(
+            task_id=decision.task_id,
+            action=decision.action.value,
+            status=callback_result.status or "",
+            follow_up=callback_result.user_message,
+        )
+        state.companion_decisions[decision.task_id] = record
         return RuntimeCallbackResult(
             action=decision.action,
             rendered=rendered,
             follow_up=callback_result.user_message,
+            applied=True,
+            record=record,
         )
 
+    record = CompanionDecisionRecord(
+        task_id=decision.task_id,
+        action=decision.action.value,
+        status=callback_result.status or "",
+        follow_up=callback_result.user_message,
+    )
+    state.companion_decisions[decision.task_id] = record
     return RuntimeCallbackResult(
         action=decision.action,
         follow_up=callback_result.user_message,
+        applied=True,
+        record=record,
     )
 
 

@@ -43,6 +43,9 @@ def test_accept_callback_persists_when_obsidian_root_is_available(tmp_path):
     assert result.persistence is not None
     assert result.persistence.project_note.exists()
     assert result.persistence.decision_log.exists()
+    assert result.persistence.decision_note.exists()
+    assert result.persistence.event_id == "m2"
+    assert result.persistence.duplicate is False
     assert result.follow_up == "Следующий шаг"
     assert "m2" not in state.pending_results
 

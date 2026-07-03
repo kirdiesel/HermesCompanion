@@ -8,17 +8,20 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, TextIO
 
 from .attention_items import (
-    AttentionDecisionRecord,
     AttentionItem,
-    DecisionOption,
     attention_item_to_telegram_payload,
 )
 from .callbacks import handle_callback
 from .live_runtime import (
-    PendingResult,
     RuntimeState,
     handle_runtime_attention_callback,
     handle_runtime_callback,
+)
+from .state_codec import (
+    StateCodecError,
+    attention_item_from_dict,
+    runtime_state_from_dict,
+    runtime_state_to_dict,
 )
 from .telegram_framework_adapter import adapt_callback_query_update, build_send_payload
 
@@ -32,7 +35,7 @@ SAFETY = {
 REAL_OBSIDIAN_ROOT = Path("C:/AIProjects/Obsidian/One").resolve()
 
 
-class StateLoadError(ValueError):
+class StateLoadError(StateCodecError):
     pass
 
 
@@ -72,55 +75,10 @@ def _load_state(*, state_path: Optional[str], obsidian_root: Optional[str]) -> R
     except Exception as exc:
         raise StateLoadError(str(exc)) from exc
 
-    if not isinstance(data, dict):
-        raise StateLoadError("state JSON must be an object")
-
-    pending_results = data.get("pending_results", {})
-    if not isinstance(pending_results, dict):
-        raise StateLoadError("state.pending_results must be an object")
-
-    for key, value in pending_results.items():
-        if not isinstance(value, dict):
-            raise StateLoadError("pending result must be an object")
-        summary = value.get("summary")
-        if not isinstance(summary, str):
-            raise StateLoadError("pending result summary must be a string")
-        message_id = str(value.get("message_id") or key)
-        state.pending_results[message_id] = PendingResult(
-            chat_id=str(value.get("chat_id") or ""),
-            message_id=message_id,
-            summary=summary,
-        )
-
-    attention_items = data.get("pending_attention_items", {})
-    if not isinstance(attention_items, dict):
-        raise StateLoadError("state.pending_attention_items must be an object")
-    for attention_id, value in attention_items.items():
-        if not isinstance(value, dict):
-            raise StateLoadError("pending attention item must be an object")
-        item = _attention_item_from_json(value)
-        if item.attention_id != str(attention_id):
-            raise StateLoadError("pending attention item id does not match state key")
-        state.pending_attention_items[item.attention_id] = item
-
-    attention_decisions = data.get("attention_decisions", {})
-    if not isinstance(attention_decisions, dict):
-        raise StateLoadError("state.attention_decisions must be an object")
-    for attention_id, value in attention_decisions.items():
-        if not isinstance(value, dict):
-            raise StateLoadError("attention decision must be an object")
-        record = AttentionDecisionRecord(
-            attention_id=str(value.get("attention_id") or attention_id),
-            option_id=str(value["option_id"]),
-            selected_label=str(value["selected_label"]),
-            effect=str(value.get("effect", "")),
-            title=str(value.get("title", "")),
-        )
-        if record.attention_id != str(attention_id):
-            raise StateLoadError("attention decision id does not match state key")
-        state.attention_decisions[record.attention_id] = record
-
-    return state
+    try:
+        return runtime_state_from_dict(data, obsidian_root=obsidian_root)
+    except StateCodecError as exc:
+        raise StateLoadError(str(exc)) from exc
 
 
 def _save_state(*, state_path: Optional[str], state: RuntimeState) -> None:
@@ -129,20 +87,7 @@ def _save_state(*, state_path: Optional[str], state: RuntimeState) -> None:
 
     path = Path(state_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "pending_results": {
-            result_id: asdict(pending)
-            for result_id, pending in sorted(state.pending_results.items())
-        },
-        "pending_attention_items": {
-            attention_id: asdict(item)
-            for attention_id, item in sorted(state.pending_attention_items.items())
-        },
-        "attention_decisions": {
-            attention_id: asdict(record)
-            for attention_id, record in sorted(state.attention_decisions.items())
-        },
-    }
+    payload = runtime_state_to_dict(state)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
@@ -150,6 +95,8 @@ def _state_summary(state: RuntimeState) -> Dict[str, Any]:
     return {
         "pending_result_ids": sorted(state.pending_results),
         "pending_results_count": len(state.pending_results),
+        "companion_decision_ids": sorted(state.companion_decisions),
+        "companion_decisions_count": len(state.companion_decisions),
         "pending_attention_ids": sorted(state.pending_attention_items),
         "pending_attention_count": len(state.pending_attention_items),
         "attention_decision_ids": sorted(state.attention_decisions),
@@ -164,25 +111,7 @@ def _telegram_payload_json(payload: Any, chat_id: str) -> Dict[str, Any]:
 
 
 def _attention_item_from_json(data: Dict[str, Any]) -> AttentionItem:
-    options = tuple(
-        DecisionOption(
-            id=str(option["id"]),
-            label=str(option["label"]),
-            effect=str(option.get("effect", "")),
-        )
-        for option in data.get("decision_options", [])
-        if isinstance(option, dict)
-    )
-    return AttentionItem(
-        attention_id=str(data["attention_id"]),
-        title=str(data["title"]),
-        project=str(data.get("project", "")),
-        path=str(data.get("path", "")),
-        reason=str(data.get("reason", "")),
-        risk=str(data.get("risk", "")),
-        recommended_option=str(data.get("recommended_option") or (options[0].id if options else "")),
-        decision_options=options,
-    )
+    return attention_item_from_dict(data)
 
 
 def _handle_attention_items_report(
@@ -393,12 +322,15 @@ def _path_payload(path: Path) -> str:
     return str(path)
 
 
-def _persistence_payload(persistence: Any) -> Optional[Dict[str, str]]:
+def _persistence_payload(persistence: Any) -> Optional[Dict[str, Any]]:
     if persistence is None:
         return None
     return {
         "project_note": _path_payload(persistence.project_note),
         "decisions_log": _path_payload(persistence.decisions_log),
+        "decision_note": _path_payload(persistence.decision_note),
+        "event_id": persistence.event_id,
+        "duplicate": persistence.duplicate,
     }
 
 
@@ -480,10 +412,21 @@ def _handle_callback_update(
             "next_intent": callback_result.next_intent,
             "follow_up": runtime_result.follow_up,
             "pending_result_found": pending_found,
+            "applied": runtime_result.applied,
+            "duplicate": runtime_result.duplicate,
+            "error": runtime_result.error,
         },
         "telegram_payload": telegram_payload,
         "persistence": persistence,
-        "created_files": list(persistence.values()) if persistence else [],
+        "created_files": (
+            [
+                persistence["project_note"],
+                persistence["decisions_log"],
+                persistence["decision_note"],
+            ]
+            if persistence
+            else []
+        ),
         "state": _state_summary(state),
     }
     _write_json(output)
