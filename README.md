@@ -63,6 +63,7 @@
 - `src/tg_companion_bot/smoke_cli.py` — dry-run CLI: Telegram-like JSON update → runtime → TelegramPayload JSON, callback `accept/revise/next`, state JSON и temp Obsidian persistence без token, polling и отправки;
 - `src/tg_companion_bot/live_run_plan.py` — выбранный framework-кандидат и safety gates для будущего live-запуска без включения polling;
 - `src/tg_companion_bot/attention_items.py` — renderer/handler для `🔴 attention_items`: отдельное сообщение, decision-кнопки, callback data и состояние после выбора без кнопок;
+- `src/tg_companion_bot/attention_dispatcher.py` — framework-neutral Telegram attention dispatcher: первый `🔴` пункт отдельным сообщением, inline-кнопки, edit без кнопок после выбора, затем следующий пункт;
 - `src/tg_companion_bot/hermes_gateway_adapter.py` — no-network boundary к существующему Hermes gateway: final/progress metadata, single-chat gate, callback action plans;
 - `src/tg_companion_bot/state_codec.py` — единый schema-versioned codec runtime state для CLI и live bridge;
 - `src/tg_companion_bot/runtime_state_store.py` — transactional SQLite state: restart recovery, rollback и сериализация конкурентных callbacks;
@@ -98,6 +99,7 @@
 - `🔴 attention_items` handler реализован через TDD: отдельное сообщение с вариантами-кнопками и результат выбора без кнопок;
 - `smoke_cli.py` интегрирован с `attention_items`: report JSON с `attention_items` превращается в последовательность Telegram-ready payloads, по одному сообщению на каждый `🔴` пункт;
 - callback `attention:<id>:<option>` сохраняет решение, убирает кнопки, блокирует stale/conflicting callbacks и идемпотентно обрабатывает повтор;
+- Telegram attention dispatcher реализован через TDD: показывает `🔴` пункты строго последовательно, редактирует выбранное сообщение без кнопок и только потом отдаёт следующий пункт;
 - Obsidian persistence учитывает параллельный `tg-context-bot`: не изменяет daily notes, `<project>.md`, generic `_index.md` и root `Журнал решений.md`;
 - accepted results сохраняются в `_tg-companion` с отдельной immutable note на `event_id`, atomic write и межпроцессной блокировкой;
 - pending results и attention state могут сохраняться в SQLite вне Vault/Git и переживать перезапуск Hermes Gateway;
@@ -109,11 +111,11 @@
 - nightly Git checkpoint отделён от Obsidian-аудита и зарегистрирован в Windows Task Scheduler;
 - последний запуск scheduler: `2026-07-02 03:30`, результат `0`, пропущенных запусков нет;
 - локальный `main` и GitHub `origin/main` синхронизированы на `efbca13`;
-- текущая проверка: `90 passed` (`2026-07-02`);
+- текущая проверка: `93 passed` (`2026-07-03`);
 - durable callback smoke после перезапуска Gateway принят и покрыт тестом: повторный `accept` после restart видит persisted decision, не создаёт дубликат и не пишет в Obsidian при `obsidian_root=None`;
 - отдельный BotFather token пока не подключён;
 - отдельный polling consumer не запускался: bridge использует уже работающий Hermes Telegram polling.
 
 ## Следующий технический шаг
 
-Следующий шаг: завершить single-chat live smoke отдельными `revise` и `next`, затем отдельной приёмкой включить одну тестовую запись в настоящий Vault.
+Следующий шаг: подключить `AttentionDispatcher` actions к существующему Hermes Telegram Gateway adapter, чтобы реальные `🔴` пункты уходили отдельными Telegram-сообщениями с inline-кнопками и edit-without-buttons после выбора; затем завершить single-chat live smoke для `revise` и `next`.

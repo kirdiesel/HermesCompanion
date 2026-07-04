@@ -344,6 +344,26 @@ SQLite store хранится вне Vault/Git, использует schema vers
 - SQLite state находится вне Vault/Git;
 - runbook и rollback: `docs/hermes_gateway_installation.md`.
 
+### done — подготовить Telegram attention dispatcher
+
+Созданы:
+
+- `src/tg_companion_bot/attention_dispatcher.py`;
+- `tests/test_attention_dispatcher.py`.
+
+Покрыто тестами:
+
+- dispatcher отправляет первый `🔴 attention_item` как отдельное Telegram-ready сообщение с inline-кнопками;
+- callback выбранного варианта редактирует исходное сообщение без `reply_markup`, то есть кнопки исчезают;
+- следующий `🔴` пункт отправляется только после выбора по предыдущему;
+- stale/wrong callback безопасно редактируется без показа следующего пункта.
+
+Проверка: `93 passed`.
+
+### doing — подключить Telegram attention dispatcher к Hermes Gateway
+
+Следующий шаг: связать `TelegramAttentionAction` с существующим Hermes Telegram adapter, чтобы реальные `🔴` пункты уходили отдельными сообщениями с кнопками и исчезали после выбора. После этого вернуться к live smoke `revise`/`next`.
+
 ### doing — завершить single-chat live smoke
 
 Live `accept` пройден через restart-fallback path: SQLite revision `1`, один durable decision, pending state очищен, один synthetic Hermes dispatch, real Vault не изменён. Остались отдельные пользовательские проверки `revise` и `next`; Vault write остаётся выключенным.
