@@ -10,7 +10,7 @@ The optional companion bridge is installed into local Hermes Agent `v0.16.0 (202
 - Telegram callback hook: `gateway/platforms/telegram.py`.
 - Service flag: `HERMES_TG_COMPANION_ENABLED=true` in `Hermes_Gateway.cmd`.
 - Local import link: `venv/Lib/site-packages/tg_companion_bot_local.pth` pointing to this repository's `src` directory.
-- Durable state: `C:\Users\AIuser\AppData\Local\hermes\tg-companion\runtime.sqlite3`.
+- Durable state: `%LOCALAPPDATA%\hermes\tg-companion\runtime.sqlite3`.
 
 `HERMES_TG_COMPANION_OBSIDIAN_ROOT` is intentionally unset. The installed bridge persists callback state but does not write accepted results to the real Vault.
 
@@ -54,7 +54,7 @@ The combined collection of several legacy Telegram fake-module suites has three 
 Backup created before installation:
 
 ```text
-C:\AIProjects\Backups\tg-companion-hermes-integration-20260702-113450
+<backup-root>\tg-companion-hermes-integration-<timestamp>
 ```
 
 Rollback consists of:

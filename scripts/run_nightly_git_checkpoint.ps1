@@ -1,10 +1,15 @@
 $ErrorActionPreference = "Stop"
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$pythonCandidates = @(
-    (Join-Path $repo ".venv\Scripts\python.exe"),
-    "C:\Users\AIuser\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe"
-)
+$pythonCandidates = @()
+if ($env:TG_COMPANION_PYTHON) {
+    $pythonCandidates += $env:TG_COMPANION_PYTHON
+}
+$pythonCandidates += Join-Path $repo ".venv\Scripts\python.exe"
+$pathPython = Get-Command python -ErrorAction SilentlyContinue
+if ($pathPython) {
+    $pythonCandidates += $pathPython.Source
+}
 $python = $pythonCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $python) {
     throw "No supported Python runtime found for nightly Git checkpoint."

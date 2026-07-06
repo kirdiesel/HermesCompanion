@@ -7,7 +7,7 @@ The live Hermes bridge must not keep `RuntimeState` only in process memory. `SQL
 Use a local path outside the Obsidian Vault and outside Git, for example:
 
 ```text
-C:\Users\<user>\AppData\Local\hermes\tg-companion\runtime.sqlite3
+%LOCALAPPDATA%\hermes\tg-companion\runtime.sqlite3
 ```
 
 The database contains no Telegram token or model credential. It stores only minimal pending summaries and decision state already required by the interface.

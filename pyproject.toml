@@ -5,10 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tg-companion-bot"
 version = "0.1.0"
-description = "Reusable Telegram companion interaction core for Hermes One."
+description = "Framework-neutral Telegram review and approval core for AI agents."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
 dependencies = []
+keywords = ["telegram", "ai-agents", "human-in-the-loop", "workflow", "obsidian"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/kirdiesel/HermesCompanion"
+Repository = "https://github.com/kirdiesel/HermesCompanion"
+Issues = "https://github.com/kirdiesel/HermesCompanion/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

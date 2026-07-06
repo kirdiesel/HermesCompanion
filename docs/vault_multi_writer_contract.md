@@ -1,6 +1,6 @@
 # Vault multi-writer contract
 
-`C:\AIProjects\Obsidian\One` is a shared Vault. A writer must own explicit files or a namespace; access to the same Vault root does not imply ownership of every note.
+`<vault-root>` is a shared Vault. A writer must own explicit files or a namespace; access to the same Vault root does not imply ownership of every note.
 
 ## Current ownership
 

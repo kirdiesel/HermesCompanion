@@ -4,7 +4,7 @@
 
 Проект:
 
-`C:\AIProjects\Bots\tg-companion-bot`
+`<repository-root>`
 
 Это отдельный Telegram-бот-компаньон, который должен стать **переносимым интерфейсным шаблоном** для будущих Telegram-ботов с агентами Hermes One.
 
@@ -110,7 +110,7 @@
 
 Папка:
 
-`C:\AIProjects\Bots\tg-companion-bot`
+`<repository-root>`
 
 Создан локальный git-репозиторий.
 
@@ -418,7 +418,7 @@ Backlog проекта:
 - не запускает polling;
 - не consuming updates;
 - не отправляет реальные Telegram-сообщения;
-- запись в настоящий `C:\AIProjects\Obsidian\One` из smoke CLI заблокирована без отдельного подтверждения.
+- запись в настоящий `<vault-root>` из smoke CLI заблокирована без отдельного подтверждения.
 
 Покрыто тестами:
 
@@ -530,7 +530,7 @@ Backlog проекта:
 
 Проектная карточка:
 
-`C:\AIProjects\Obsidian\One\03_Проекты\Активные\01_TG_бот_собеседник.md`
+`<vault-root>/<project-note>.md`
 
 Она обновлялась после каждого крупного шага.
 
