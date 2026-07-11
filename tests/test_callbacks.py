@@ -40,14 +40,15 @@ def test_revise_callback_returns_to_work_without_done():
     assert result.status == "▶️ выполняется"
     assert result.remove_keyboard is True
     assert result.next_intent == "await_revision_instructions"
-    assert "доработка" in result.user_message.lower()
+    assert "дорабат" in result.user_message.lower()
+    assert "один короткий вопрос" in result.user_message.lower()
 
 
 def test_next_callback_keeps_review_and_requests_next_step():
     result = handle_callback("companion:next:task-1")
 
     assert result.status == "🔎 приёмка"
-    assert result.remove_keyboard is False
+    assert result.remove_keyboard is True
     assert result.next_intent == "show_next_step"
 
 
@@ -57,4 +58,4 @@ def test_unknown_callback_is_safe_noop():
     assert result.status is None
     assert result.remove_keyboard is False
     assert result.next_intent == "noop"
-    assert "Не поняла" in result.user_message
+    assert "Ничего не изменено" in result.user_message

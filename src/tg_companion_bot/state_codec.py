@@ -133,6 +133,7 @@ def _load_companion_decisions(data: Mapping[str, Any], state: RuntimeState) -> N
                 action=str(value["action"]),
                 status=str(value.get("status", "")),
                 follow_up=str(value.get("follow_up", "")),
+                chat_id=str(value.get("chat_id", "")),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise StateCodecError(f"invalid companion decision: {error}") from error

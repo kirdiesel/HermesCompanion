@@ -64,6 +64,77 @@ def test_revise_callback_keeps_pending_result_for_draft_revision():
     assert "m3" in state.pending_results
 
 
+def test_next_completed_result_replaces_consumed_revise_result_in_same_chat():
+    state = RuntimeState()
+    handle_incoming_message(
+        IncomingMessage(chat_id="chat-1", text="Первый результат", message_id="m3"),
+        state=state,
+    )
+    handle_runtime_callback("companion:revise:m3", state=state, chat_id="chat-1")
+
+    handle_incoming_message(
+        IncomingMessage(chat_id="chat-1", text="Доработанный результат", message_id="m4"),
+        state=state,
+    )
+
+    assert "m3" not in state.pending_results
+    assert state.pending_results["m4"].summary == "Доработанный результат"
+    assert state.companion_decisions["m3"].action == "revise"
+
+
+def test_callback_without_pending_result_is_rejected_as_stale():
+    result = handle_runtime_callback(
+        "companion:accept:missing",
+        state=RuntimeState(),
+        chat_id="chat-1",
+    )
+
+    assert result.applied is False
+    assert result.error == "stale_companion_result"
+
+
+def test_callback_from_different_chat_cannot_resolve_pending_result():
+    state = RuntimeState()
+    handle_incoming_message(
+        IncomingMessage(chat_id="chat-1", text="Приватный результат", message_id="m5"),
+        state=state,
+    )
+
+    result = handle_runtime_callback(
+        "companion:accept:m5",
+        state=state,
+        chat_id="chat-2",
+    )
+
+    assert result.applied is False
+    assert result.error == "callback_chat_mismatch"
+    assert "m5" in state.pending_results
+    assert "m5" not in state.companion_decisions
+
+
+def test_duplicate_callback_cannot_be_replayed_from_another_chat():
+    state = RuntimeState()
+    handle_incoming_message(
+        IncomingMessage(chat_id="chat-1", text="Результат", message_id="m6"),
+        state=state,
+    )
+    accepted = handle_runtime_callback(
+        "companion:accept:m6",
+        state=state,
+        chat_id="chat-1",
+    )
+
+    replay = handle_runtime_callback(
+        "companion:accept:m6",
+        state=state,
+        chat_id="chat-2",
+    )
+
+    assert accepted.applied is True
+    assert replay.duplicate is False
+    assert replay.error == "callback_chat_mismatch"
+
+
 def test_unknown_callback_is_safe_noop():
     state = RuntimeState()
 

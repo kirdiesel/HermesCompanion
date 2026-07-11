@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tg_companion_bot.smoke_cli import REAL_OBSIDIAN_ROOT, _is_real_obsidian_root
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -362,7 +364,41 @@ def test_callback_next_with_state_keeps_pending_result(tmp_path):
     assert payload["callback_result"]["action"] == "next"
     assert payload["callback_result"]["status"] == "🔎 приёмка"
     assert payload["callback_result"]["next_intent"] == "show_next_step"
+    assert payload["callback_result"]["remove_keyboard"] is True
+    assert payload["telegram_payload"]["remove_keyboard"] is True
     assert "101" in read_state(state_path)["pending_results"]
+
+
+def test_callback_without_pending_state_returns_stale_error(tmp_path):
+    state_path = tmp_path / "state.json"
+
+    result = run_cli(callback_update("accept"), "--state", str(state_path))
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert payload["callback_result"]["error"] == "stale_companion_result"
+    assert not state_path.exists() or read_state(state_path)["pending_results"] == {}
+
+
+def test_callback_from_other_chat_does_not_apply_pending_result(tmp_path):
+    state_path = tmp_path / "state.json"
+    write_state(state_path)
+    update = callback_update("accept")
+    update["callback_query"]["message"]["chat"]["id"] = 999
+
+    result = run_cli(update, "--state", str(state_path))
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert payload["callback_result"]["error"] == "callback_chat_mismatch"
+    assert "101" in read_state(state_path)["pending_results"]
+
+
+def test_real_vault_guard_blocks_root_and_descendants():
+    assert _is_real_obsidian_root(str(REAL_OBSIDIAN_ROOT)) is True
+    assert _is_real_obsidian_root(str(REAL_OBSIDIAN_ROOT / "03_Проекты" / "smoke")) is True
 
 
 def test_callback_accept_with_obsidian_root_writes_to_temp_vault(tmp_path):

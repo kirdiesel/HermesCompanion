@@ -130,3 +130,16 @@ def test_gateway_boundary_has_no_live_framework_or_network_imports():
     assert "import aiogram" not in source
     assert "gateway.platforms" not in source
     assert "start_polling" not in source
+
+
+def test_stale_companion_callback_fails_closed_without_edit_plan():
+    plan = plan_hermes_event(
+        _event("callback", callback_data="companion:accept:missing", text=""),
+        state=RuntimeState(),
+        allowed_chat_id="777",
+        allowed_user_id="42",
+    )
+
+    assert plan.ok is False
+    assert plan.error == "stale_companion_result"
+    assert plan.actions == ()

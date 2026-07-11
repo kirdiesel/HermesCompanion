@@ -86,3 +86,15 @@ def test_adapt_callback_query_update_accepts_attention_namespace():
 
     assert callback is not None
     assert callback.callback_data == "attention:review-1:keep"
+
+
+def test_adapt_callback_query_update_rejects_callback_without_message_identity():
+    update = {
+        "callback_query": {
+            "id": "abc",
+            "data": "companion:accept:77",
+            "message": {"chat": {"id": 555}},
+        }
+    }
+
+    assert adapt_callback_query_update(update) is None

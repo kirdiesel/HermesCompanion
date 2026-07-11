@@ -39,6 +39,7 @@ class CompanionDecisionRecord:
     action: str
     status: str
     follow_up: str
+    chat_id: str = ""
 
 
 @dataclass
@@ -87,6 +88,7 @@ def handle_incoming_message(message: IncomingMessage, *, state: RuntimeState) ->
     updates, sends messages, or touches credentials.
     """
 
+    _prune_consumed_pending_results(state, chat_id=message.chat_id)
     rendered = render_message(
         RenderRequest(
             kind="final_result",
@@ -108,6 +110,7 @@ def handle_runtime_callback(
     state: RuntimeState,
     project: str = "Inbox",
     recommendation: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> RuntimeCallbackResult:
     decision = parse_callback_data(callback_data)
     if decision is None:
@@ -115,6 +118,13 @@ def handle_runtime_callback(
 
     existing = state.companion_decisions.get(decision.task_id)
     if existing is not None:
+        if chat_id is not None and existing.chat_id and str(existing.chat_id) != str(chat_id):
+            return RuntimeCallbackResult(
+                action=decision.action,
+                follow_up="Эта кнопка относится к другому чату. Ничего не изменено.",
+                error="callback_chat_mismatch",
+                record=existing,
+            )
         duplicate = existing.action == decision.action.value
         return RuntimeCallbackResult(
             action=decision.action,
@@ -125,6 +135,18 @@ def handle_runtime_callback(
         )
 
     pending = state.pending_results.get(decision.task_id)
+    if pending is None:
+        return RuntimeCallbackResult(
+            action=decision.action,
+            follow_up="Этот результат устарел или уже недоступен. Ничего не изменено.",
+            error="stale_companion_result",
+        )
+    if chat_id is not None and str(pending.chat_id) != str(chat_id):
+        return RuntimeCallbackResult(
+            action=decision.action,
+            follow_up="Эта кнопка относится к другому чату. Ничего не изменено.",
+            error="callback_chat_mismatch",
+        )
     callback_result: CallbackResult = handle_callback(
         callback_data,
         has_recommendation=bool(recommendation),
@@ -151,6 +173,7 @@ def handle_runtime_callback(
             action=decision.action.value,
             status=callback_result.status or "",
             follow_up=recommendation or callback_result.user_message,
+            chat_id=pending.chat_id,
         )
         state.companion_decisions[decision.task_id] = record
         return RuntimeCallbackResult(
@@ -171,6 +194,7 @@ def handle_runtime_callback(
             action=decision.action.value,
             status=callback_result.status or "",
             follow_up=callback_result.user_message,
+            chat_id=pending.chat_id,
         )
         state.companion_decisions[decision.task_id] = record
         return RuntimeCallbackResult(
@@ -186,6 +210,7 @@ def handle_runtime_callback(
         action=decision.action.value,
         status=callback_result.status or "",
         follow_up=callback_result.user_message,
+        chat_id=pending.chat_id,
     )
     state.companion_decisions[decision.task_id] = record
     return RuntimeCallbackResult(
@@ -194,6 +219,19 @@ def handle_runtime_callback(
         applied=True,
         record=record,
     )
+
+
+def _prune_consumed_pending_results(state: RuntimeState, *, chat_id: str) -> None:
+    """Drop prior non-accepted results after their replacement arrives."""
+
+    for task_id, pending in tuple(state.pending_results.items()):
+        record = state.companion_decisions.get(task_id)
+        if (
+            str(pending.chat_id) == str(chat_id)
+            and record is not None
+            and record.action in {CallbackAction.REVISE.value, CallbackAction.NEXT.value}
+        ):
+            state.pending_results.pop(task_id, None)
 
 
 def handle_runtime_attention_callback(

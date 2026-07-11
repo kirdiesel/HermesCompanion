@@ -90,8 +90,7 @@ def recorded_decision_payload(record: AttentionDecisionRecord, *, duplicate: boo
         text=(
             f"{prefix}: {record.selected_label}\n"
             f"Пункт: {record.title}\n"
-            f"Действие: {record.effect}\n"
-            "Кнопки убраны."
+            f"Действие: {record.effect}"
         ),
         reply_markup=None,
     )
@@ -100,17 +99,22 @@ def recorded_decision_payload(record: AttentionDecisionRecord, *, duplicate: boo
 def attention_item_to_telegram_payload(item: AttentionItem) -> AttentionPayload:
     lines = [
         f"🔴 Требует внимания: {item.title}",
-        "",
-        f"Проект/кластер: {item.project}",
-        f"Путь: {item.path}",
-        f"Почему: {item.reason}",
-        f"Риск: {item.risk}",
-        "",
-        "Выбери один вариант:",
+        f"Проект: {item.project}",
     ]
+    if item.path:
+        lines.append(f"Путь: {item.path}")
+    lines.extend([
+        f"Причина: {item.reason}",
+        f"Риск: {item.risk}",
+    ])
+    recommended = next(
+        (option.label for option in item.decision_options if option.id == item.recommended_option),
+        None,
+    )
+    if recommended:
+        lines.append(f"Рекомендация: {recommended}")
     keyboard = []
     for option in item.decision_options:
-        lines.append(f"- {option.label} — {option.effect}")
         keyboard.append([
             {
                 "text": option.label,
@@ -134,7 +138,7 @@ def apply_attention_decision(item: AttentionItem, option_id: str) -> AttentionDe
             payload=AttentionPayload(
                 text=(
                     f"⚠️ Неизвестный вариант решения для: {item.title}\n"
-                    "Кнопки убраны. Пришли решение текстом или запроси детали."
+                    "Запроси актуальный пункт или пришли решение текстом."
                 ),
                 reply_markup=None,
             ),
@@ -149,8 +153,7 @@ def apply_attention_decision(item: AttentionItem, option_id: str) -> AttentionDe
             text=(
                 f"✅ Решение принято: {selected.label}\n"
                 f"Пункт: {item.title}\n"
-                f"Действие: {selected.effect}\n"
-                "Кнопки убраны."
+                f"Действие: {selected.effect}"
             ),
             reply_markup=None,
         ),

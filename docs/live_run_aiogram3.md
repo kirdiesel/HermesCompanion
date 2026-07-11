@@ -1,6 +1,6 @@
-# aiogram 3 live-run dry-run plan
+# Deferred aiogram 3 reference adapter
 
-This runbook prepares a future `aiogram 3` Telegram adapter without starting live polling.
+This runbook is not the current production path. The live interface runs through the existing Hermes Gateway and its `python-telegram-bot` polling process. Use this plan only if a separate standalone bot is later justified by measured UX needs.
 
 ## Current mode
 
@@ -14,8 +14,9 @@ This runbook prepares a future `aiogram 3` Telegram adapter without starting liv
 1. Create a separate BotFather token only after explicit user confirmation.
 2. Copy `.env.example` to `.env` locally.
 3. Put the real token into `TG_COMPANION_BOT_TOKEN` in `.env` only.
-4. Do not commit `.env`.
-5. Do not paste the token into README, tests, logs, Obsidian, Telegram, or GitHub.
+4. Set one `TG_COMPANION_ALLOWED_CHAT_ID`; keep `DRY_RUN=true`.
+5. Do not commit `.env`.
+6. Do not paste the token into README, tests, logs, Obsidian, Telegram, or GitHub.
 
 ## Polling conflict check
 

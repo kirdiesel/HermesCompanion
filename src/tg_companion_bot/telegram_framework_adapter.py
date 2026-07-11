@@ -58,18 +58,25 @@ def adapt_callback_query_update(update: Dict[str, Any]) -> Optional[CallbackQuer
         return None
 
     data = callback_query.get("data")
-    if not isinstance(data, str) or not data.startswith(("companion:", "attention:")):
+    callback_query_id = callback_query.get("id")
+    if (
+        not isinstance(data, str)
+        or not data.startswith(("companion:", "attention:"))
+        or not callback_query_id
+    ):
         return None
 
     message = callback_query.get("message") or {}
     chat = message.get("chat") if isinstance(message, dict) else {}
     chat_id = chat.get("id") if isinstance(chat, dict) else None
     message_id = message.get("message_id") if isinstance(message, dict) else None
+    if chat_id is None or message_id is None:
+        return None
 
     return CallbackQueryUpdate(
-        callback_query_id=str(callback_query.get("id", "")),
-        chat_id="" if chat_id is None else str(chat_id),
-        message_id="" if message_id is None else str(message_id),
+        callback_query_id=str(callback_query_id),
+        chat_id=str(chat_id),
+        message_id=str(message_id),
         callback_data=data,
     )
 

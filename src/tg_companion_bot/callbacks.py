@@ -62,7 +62,7 @@ def handle_callback(data: str, *, has_recommendation: bool = False) -> CallbackR
             status=None,
             remove_keyboard=False,
             next_intent="noop",
-            user_message="Не поняла это действие. Лучше продолжу без изменения статуса.",
+            user_message="Действие устарело или не распознано. Ничего не изменено.",
         )
 
     if decision.action is CallbackAction.ACCEPT:
@@ -72,7 +72,7 @@ def handle_callback(data: str, *, has_recommendation: bool = False) -> CallbackR
             status=DONE_STATUS,
             remove_keyboard=True,
             next_intent=next_intent,
-            user_message="✅ Результат принят. Перехожу к рекомендации; если её нет — к следующему оптимальному шагу.",
+            user_message="✅ Результат принят. Продолжаю по рекомендации или следующему шагу.",
         )
 
     if decision.action is CallbackAction.REVISE:
@@ -81,16 +81,16 @@ def handle_callback(data: str, *, has_recommendation: bool = False) -> CallbackR
             status=IN_PROGRESS_STATUS,
             remove_keyboard=True,
             next_intent="await_revision_instructions",
-            user_message="🔎 Приняла: нужна доработка. Напиши, что именно поправить, или пришли уточнение.",
+            user_message="✏️ Дорабатываю результат. Если нужен ваш факт, задам один короткий вопрос.",
         )
 
     if decision.action is CallbackAction.NEXT:
         return CallbackResult(
             task_id=decision.task_id,
             status=REVIEW_STATUS,
-            remove_keyboard=False,
+            remove_keyboard=True,
             next_intent="show_next_step",
-            user_message="➡️ Показываю следующий оптимальный шаг по текущей задаче.",
+            user_message="➡️ Перехожу к следующему шагу.",
         )
 
     return CallbackResult(
@@ -98,5 +98,5 @@ def handle_callback(data: str, *, has_recommendation: bool = False) -> CallbackR
         status=None,
         remove_keyboard=False,
         next_intent="noop",
-        user_message="Не поняла это действие. Лучше продолжу без изменения статуса.",
+        user_message="Действие устарело или не распознано. Ничего не изменено.",
     )

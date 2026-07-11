@@ -17,6 +17,15 @@ CURRENT_NOTE_NAME = "Текущий результат.md"
 DECISIONS_LOG_NAME = "Журнал решений.md"
 DECISIONS_DIR_NAME = "Решения"
 LOCK_FILE_NAME = ".write.lock"
+MAX_SUMMARY_CHARS = 8_000
+_CONTROL_COMMENT = re.compile(
+    r"<!--\s*(?:tg-companion|managed-by)\s*:.*?-->",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_UI_NOISE_LINE = re.compile(
+    r"^(?:Статус:\s*(?:▶️|🔎|✅)|Кнопки\s+(?:убраны|удалены)\.?$)",
+    flags=re.IGNORECASE,
+)
 
 
 class PersistenceConflictError(RuntimeError):
@@ -179,15 +188,21 @@ def _journal_marker(event_id: str, content_hash: str) -> str:
 
 def _render_project_note(project_slug: str, result: AcceptedResult, event_id: str) -> str:
     artifacts = _render_artifacts(result.artifacts)
+    title = _clean_inline(result.title, max_chars=300)
+    accepted_at = _clean_inline(result.accepted_at, max_chars=100)
+    summary = _render_quote(_clean_summary(result.summary))
+    next_step = _render_quote(_clean_inline(result.next_step, max_chars=2_000))
     return (
         "<!-- managed-by: tg-companion-bot -->\n"
         f"# Текущий результат — {project_slug}\n\n"
-        f"- Дата принятия: {result.accepted_at}\n"
-        f"- Результат: {result.title}\n"
-        f"- Итог: {result.summary}\n"
-        f"- Следующий шаг: {result.next_step}\n"
+        f"- Дата принятия: {accepted_at}\n"
+        f"- Результат: {title}\n\n"
+        "## Итог\n"
+        f"{summary}\n\n"
+        "## Следующий шаг\n"
+        f"{next_step}\n\n"
         f"{artifacts}"
-        f"- Запись решения: [[{DECISIONS_DIR_NAME}/{event_id}|{result.title}]]\n\n"
+        f"- Запись решения: [[{DECISIONS_DIR_NAME}/{event_id}|{title}]]\n\n"
         "## Связанные заметки\n"
         f"- [[{DECISIONS_LOG_NAME.removesuffix('.md')}]]\n"
     )
@@ -199,13 +214,19 @@ def _render_decision_note(
     content_hash: str,
 ) -> str:
     artifacts = _render_artifacts(result.artifacts)
+    title = _clean_inline(result.title, max_chars=300)
+    accepted_at = _clean_inline(result.accepted_at, max_chars=100)
+    summary = _render_quote(_clean_summary(result.summary))
+    next_step = _render_quote(_clean_inline(result.next_step, max_chars=2_000))
     return (
         f"{_event_marker(event_id, content_hash)}\n"
         "<!-- managed-by: tg-companion-bot; immutable: true -->\n"
-        f"# {result.title}\n\n"
-        f"- Дата принятия: {result.accepted_at}\n"
-        f"- Итог: {result.summary}\n"
-        f"- Следующий шаг: {result.next_step}\n"
+        f"# {title}\n\n"
+        f"- Дата принятия: {accepted_at}\n\n"
+        "## Итог\n"
+        f"{summary}\n\n"
+        "## Следующий шаг\n"
+        f"{next_step}\n\n"
         f"{artifacts}"
     )
 
@@ -215,11 +236,17 @@ def _render_decision_entry(
     event_id: str,
     content_hash: str,
 ) -> str:
+    title = _clean_inline(result.title, max_chars=300)
+    accepted_at = _clean_inline(result.accepted_at, max_chars=100)
+    summary = _render_quote(_clean_summary(result.summary))
+    next_step = _render_quote(_clean_inline(result.next_step, max_chars=2_000))
     return (
         f"{_journal_marker(event_id, content_hash)}\n"
-        f"## {result.accepted_at} — {result.title}\n"
-        f"- Итог: {result.summary}\n"
-        f"- Следующий шаг: {result.next_step}\n"
+        f"## {accepted_at} — {title}\n"
+        "### Итог\n"
+        f"{summary}\n\n"
+        "### Следующий шаг\n"
+        f"{next_step}\n\n"
         f"- Подробно: [[{DECISIONS_DIR_NAME}/{event_id}|запись решения]]\n\n"
     )
 
@@ -228,8 +255,39 @@ def _render_artifacts(artifacts: list[str]) -> str:
     if not artifacts:
         return "- Артефакты: нет\n"
     lines = ["- Артефакты:"]
-    lines.extend(f"  - `{artifact}`" for artifact in artifacts)
+    lines.extend(f"  - `{_clean_inline(artifact, max_chars=1_000)}`" for artifact in artifacts)
     return "\n".join(lines) + "\n"
+
+
+def _clean_summary(value: str, *, max_chars: int = MAX_SUMMARY_CHARS) -> str:
+    text = str(value or "").replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n")
+    text = _CONTROL_COMMENT.sub("", text)
+    lines: list[str] = []
+    previous_blank = False
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if _UI_NOISE_LINE.match(line):
+            continue
+        if not line:
+            if lines and not previous_blank:
+                lines.append("")
+            previous_blank = True
+            continue
+        lines.append(line)
+        previous_blank = False
+    cleaned = "\n".join(lines).strip() or "Нет содержательного итога."
+    if len(cleaned) > max_chars:
+        cleaned = cleaned[: max_chars - 3].rstrip() + "..."
+    return cleaned
+
+
+def _clean_inline(value: str, *, max_chars: int) -> str:
+    cleaned = re.sub(r"\s+", " ", _clean_summary(value, max_chars=max_chars)).strip()
+    return cleaned[:max_chars].rstrip()
+
+
+def _render_quote(value: str) -> str:
+    return "\n".join(">" if not line else f"> {line}" for line in value.split("\n"))
 
 
 def _ensure_trailing_newline(content: str) -> str:

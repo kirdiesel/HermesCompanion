@@ -54,8 +54,10 @@ def test_simple_information_message_has_no_buttons():
         )
     )
 
-    assert rendered.status == ACCEPTED_STATUS
+    assert rendered.status is ACCEPTED_STATUS
     assert rendered.buttons == []
+    assert "Статус:" not in rendered.text
+    assert not rendered.text.startswith("##")
 
 
 def test_accepted_result_gets_done_status_without_keyboard():
@@ -72,3 +74,20 @@ def test_accepted_result_gets_done_status_without_keyboard():
     assert "✅ готово" in rendered.text
     assert rendered.buttons == []
     assert "Продолжить по backlog" in rendered.text
+
+
+def test_final_result_can_expose_only_contextually_available_actions():
+    rendered = render_message(
+        RenderRequest(
+            kind="final_result",
+            title="Итог без следующего шага",
+            done=["Проверка завершена"],
+            actions=("accept", "revise"),
+        )
+    )
+
+    assert [button.action for button in rendered.buttons] == ["accept", "revise"]
+    assert [button.text for button in rendered.buttons] == [
+        "Принять результат",
+        "Доработать результат",
+    ]

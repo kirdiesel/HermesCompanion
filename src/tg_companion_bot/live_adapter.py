@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -10,6 +9,8 @@ class AdapterConfig:
     bot_token: str | None
     obsidian_vault: Path
     default_project: str
+    allowed_chat_id: str | None = None
+    dry_run: bool = True
 
     @property
     def has_bot_token(self) -> bool:
@@ -40,16 +41,28 @@ class LiveRunPlan:
 def load_adapter_config(env_file: Path) -> AdapterConfig:
     values = _parse_env_file(env_file)
     return AdapterConfig(
-        bot_token=values.get("BOT_TOKEN") or None,
-        obsidian_vault=Path(values.get("OBSIDIAN_VAULT") or "C:/AIProjects/Obsidian/One"),
-        default_project=values.get("DEFAULT_PROJECT") or "TG Bot Companion",
+        bot_token=_first_value(values, "TG_COMPANION_BOT_TOKEN", "BOT_TOKEN"),
+        obsidian_vault=Path(
+            _first_value(values, "TG_COMPANION_OBSIDIAN_ROOT", "OBSIDIAN_VAULT")
+            or "C:/AIProjects/Obsidian/One"
+        ),
+        default_project=(
+            _first_value(values, "TG_COMPANION_DEFAULT_PROJECT", "DEFAULT_PROJECT")
+            or "TG Bot Companion"
+        ),
+        allowed_chat_id=_first_value(values, "TG_COMPANION_ALLOWED_CHAT_ID"),
+        dry_run=_parse_bool(values.get("DRY_RUN"), default=True),
     )
 
 
 def build_live_run_plan(config: AdapterConfig) -> LiveRunPlan:
     blockers: list[str] = []
     if not config.has_bot_token:
-        blockers.append("BOT_TOKEN is missing")
+        blockers.append("TG_COMPANION_BOT_TOKEN is missing")
+    if not config.allowed_chat_id:
+        blockers.append("TG_COMPANION_ALLOWED_CHAT_ID is missing")
+    if not config.dry_run:
+        blockers.append("DRY_RUN must be true")
     if not str(config.obsidian_vault):
         blockers.append("OBSIDIAN_VAULT is missing")
 
@@ -63,6 +76,7 @@ def build_live_run_plan(config: AdapterConfig) -> LiveRunPlan:
             "BotFather token",
             "Obsidian vault path",
             "Default project",
+            "Single allowed chat",
             "Core renderer/callback/persistence tests",
         ),
         risks=(
@@ -92,3 +106,17 @@ def _strip_quotes(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         return value[1:-1]
     return value
+
+
+def _first_value(values: dict[str, str], *keys: str) -> str | None:
+    for key in keys:
+        value = values.get(key)
+        if value:
+            return value
+    return None
+
+
+def _parse_bool(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}

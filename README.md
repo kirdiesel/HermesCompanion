@@ -1,121 +1,116 @@
 # TG Companion Bot
 
-Назначение: бот-собеседник и главный интерфейс общения с Hermes.
-
-## Цель
-
-Создать Telegram-бота, который общается с Кириллом через Hermes, помогает принимать результаты, задаёт уточняющие вопросы, предлагает кнопки и постепенно становится главным интерфейсом работы с ИИ.
-
-Базовый цикл:
+Telegram-интерфейс для цикла:
 
 ```text
-сообщение в Telegram → проверяемый результат → приёмка кнопкой → Obsidian → следующий оптимальный шаг
+задача -> результат -> приёмка -> Obsidian -> следующий шаг
 ```
 
-## Ключевые функции
+Проект развивает переносимое интерфейсное ядро и подключает его к уже работающему Hermes Telegram Gateway. Отдельный polling-процесс сейчас не нужен и не запущен.
 
-- живое общение;
-- итоговые ответы с оптимальным количеством кнопок;
-- приёмка результата;
-- доработка результата;
-- предложение следующего шага;
-- ночная оптимизация структуры Obsidian;
-- управление взаимодействием с личными и рабочими агентами.
+## Что работает сейчас
 
-## Согласованные пользовательские статусы
+- Hermes Gateway принимает обычные Telegram-сообщения и выполняет задачи.
+- Итоговые ответы получают смысловые кнопки `Принять результат`, `Доработать`, `Следующий шаг`.
+- Промежуточные, системные, cron- и диагностические сообщения не получают кнопки приёмки.
+- `accept/revise/next` превращаются в следующий Hermes-turn.
+- `accept` проверен live; решения сохраняются в SQLite и переживают перезапуск Gateway.
+- Повторный callback не запускает действие второй раз; callback другого чата отклоняется.
+- Dry-run цикл message/callback/state/temporary Obsidian покрыт тестами.
+- Запись в общий Vault изолирована в `03_Проекты/Активные/<project>/_tg-companion` и защищена lock + atomic replace.
+- Реальный nightly Obsidian report преобразуется в Telegram-ready attention items без token и отправки.
+- Интерфейсный профиль и готовый prompt для переноса в другой Hermes One вынесены отдельно.
+- Ночной Git checkpoint проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
 
-Использовать только:
+## Что пока не работает live
+
+- Реальные nightly attention items ещё не отправляются в Telegram с кнопками.
+- `revise` и `next` не прошли отдельный live smoke после установки durable bridge.
+- Accepted results не пишутся в реальный Vault: `HERMES_TG_COMPANION_OBSIDIAN_ROOT` не задан.
+- Надёжная маршрутизация результата в конкретный проект отсутствует; fallback остаётся `Inbox`.
+- Ежемесячный ChatGPT export пока передаётся и импортируется вручную.
+- Standalone `aiogram`-бот не реализован; это отложенный reference adapter, а не текущий runtime.
+
+## Важное разграничение
+
+Ночная оптимизация Obsidian выполняется внешними Hermes-задачами:
+
+- `nightly-obsidian-structure-optimizer` в 03:00: локальный детерминированный аудит;
+- `nightly-obsidian-semantic-review` в 03:30: необязательный AI-обзор.
+
+`tg-companion-bot` не оптимизирует Vault сам. Его роль в этом контуре: превратить спорные пункты аудита в короткие Telegram-решения с кнопками и сохранить выбор.
+
+## Пользовательские правила
+
+Статусы только:
 
 - `▶️ выполняется`
 - `🔎 приёмка`
 - `✅ готово`
 
-## Согласованные правила кнопок
+Кнопки:
 
-- Кнопки нужны на итоговом результате и приёмке.
-- Кнопки не нужны на промежуточных комментариях, статусах, системных сообщениях и простых информационных ответах.
-- Количество кнопок зависит от ситуации.
-- Labels должны быть смысловыми действиями.
-- После подтверждения бот выполняет рекомендацию, а если её нет — следующий оптимальный шаг.
+- только под итогом или реальным выбором;
+- минимально достаточное число;
+- без кнопок под прогрессом, справкой, ошибкой и системным сообщением;
+- `next` не означает приёмку;
+- `accept` обязателен перед записью результата как принятого.
 
-## Проектные документы
+Краткость:
 
-- `PROJECT_CONTEXT.md` — исходный контекст проекта и согласованные правила.
-- `HERMES_BRIEF.md` — бриф для Hermes/агентов.
-- `AGENT_MANIFEST.md` — манифест агента проекта.
-- `BACKLOG.md` — нерешённые задачи и следующий порядок реализации.
+- сначала результат;
+- затем только проверка, риск и следующий шаг, влияющие на решение;
+- не описывать пользователю устройство кнопок, state или adapter-а.
 
-## Связанный проект Obsidian
+## Основные модули
 
-`C:\AIProjects\Obsidian\One\03_Проекты\Активные\01_TG_бот_собеседник.md`
+- `interaction_profile.py`: статусы, labels, доступные действия и переносимый handoff prompt.
+- `rendering.py`: краткие итоговые/progress/info сообщения.
+- `callbacks.py`: `accept/revise/next` без Telegram framework.
+- `live_runtime.py`: pending state, ownership, idempotency и Obsidian handoff.
+- `runtime_state_store.py`: restart-safe SQLite transactions.
+- `hermes_gateway_adapter.py`: boundary к существующему Hermes Gateway.
+- `obsidian.py`: multi-writer-safe accepted-result persistence.
+- `attention_items.py`: один спорный пункт и его decision buttons.
+- `attention_dispatcher.py`: последовательная выдача attention items.
+- `nightly_attention_adapter.py`: реальный nightly JSON -> canonical attention items.
+- `smoke_cli.py`: Windows-safe end-to-end dry-run без token/polling/send.
+- `scripts/nightly_git_checkpoint.py`: deterministic nightly Git flow.
 
-## Reusable interface core
+## Перенос интерфейса
 
-Первый слой реализации делается как переносимое ядро интерфейса, а не как одноразовый live-бот:
+Готовый prompt находится в `docs/hermes_one_interface_prompt.md` и выводится командой:
 
-- `src/tg_companion_bot/rendering.py` — renderer статусов, итоговых сообщений и кнопок;
-- `src/tg_companion_bot/callbacks.py` — callback-модель `accept/revise/next`;
-- `src/tg_companion_bot/obsidian.py` — multi-writer-safe persistence: собственный `_tg-companion` namespace, immutable event notes, idempotency, OS lock и atomic replace;
-- `src/tg_companion_bot/live_adapter.py` — framework-neutral live adapter boundary: config, dry-run plan, blockers/risks без consuming updates;
-- `src/tg_companion_bot/live_runtime.py` — framework-neutral runtime glue: incoming message → review render, callback → accept/revise/next, optional Obsidian persistence без polling;
-- `src/tg_companion_bot/telegram_adapter_shell.py` — framework-neutral Telegram payload adapter: `RenderedMessage` → text/reply_markup/callback_data без token и polling;
-- `src/tg_companion_bot/telegram_framework_adapter.py` — concrete Telegram update mapping: Telegram-like dict update → runtime message/callback → payload, без framework import, token и polling;
-- `src/tg_companion_bot/smoke_cli.py` — dry-run CLI: Telegram-like JSON update → runtime → TelegramPayload JSON, callback `accept/revise/next`, state JSON и temp Obsidian persistence без token, polling и отправки;
-- `src/tg_companion_bot/live_run_plan.py` — выбранный framework-кандидат и safety gates для будущего live-запуска без включения polling;
-- `src/tg_companion_bot/attention_items.py` — renderer/handler для `🔴 attention_items`: отдельное сообщение, decision-кнопки, callback data и состояние после выбора без кнопок;
-- `src/tg_companion_bot/attention_dispatcher.py` — framework-neutral Telegram attention dispatcher: первый `🔴` пункт отдельным сообщением, inline-кнопки, edit без кнопок после выбора, затем следующий пункт;
-- `src/tg_companion_bot/hermes_gateway_adapter.py` — no-network boundary к существующему Hermes gateway: final/progress metadata, single-chat gate, callback action plans;
-- `src/tg_companion_bot/state_codec.py` — единый schema-versioned codec runtime state для CLI и live bridge;
-- `src/tg_companion_bot/runtime_state_store.py` — transactional SQLite state: restart recovery, rollback и сериализация конкурентных callbacks;
-- `scripts/nightly_git_checkpoint.py` — deterministic secret scan → compile/tests → gated commit/push, без LLM;
-- `requirements.txt` — минимальные зависимости будущего `aiogram 3` adapter shell;
-- `.env.example` — шаблон локальной конфигурации без реального token;
-- `docs/live_run_aiogram3.md` — dry-run runbook: token storage, polling conflict check, single-chat smoke gate;
-- `tests/` — TDD-проверки поведения без Telegram token и live polling.
+```powershell
+python -m tg_companion_bot.interaction_profile
+```
 
-Цель: этот интерфейс должен легко использоваться как стартовый UX/core в других Telegram-ботах с подключёнными агентами Hermes One.
+Renderer принимает другой `InteractionProfile`, поэтому labels можно заменить без копирования callback/runtime-кода.
 
-## Текущий статус
+## Проверка
 
-Статус обновлён: `2026-07-02`.
+```powershell
+python -m compileall -q src scripts
+python -m pytest -q
+```
 
-Проект находится на стадии проверенного dry-run MVP; live Telegram-интеграция ещё не активирована:
+Проверено 10 июля 2026 года:
 
-- локальный git-репозиторий создан;
-- контекст перенесён;
-- бриф создан;
-- манифест агента создан;
-- backlog создан;
-- renderer итогового сообщения и кнопок реализован через TDD;
-- callback-модель `accept/revise/next` реализована через TDD;
-- Obsidian persistence MVP реализован через TDD;
-- live adapter boundary реализован через TDD в dry-run режиме;
-- live runtime glue реализован через TDD без polling/token;
-- Telegram adapter shell реализован через TDD без token/polling: conversion `RenderedMessage` → Telegram payload/callback data;
-- concrete Telegram framework adapter mapping реализован через TDD без token/polling;
-- smoke-test CLI реализован через TDD: Telegram-like JSON update → runtime → TelegramPayload JSON, callback `accept/revise/next`, `--state`, `--obsidian-root` для test vault без token/polling/sending;
-- framework-кандидат выбран: `aiogram 3`, live-run safety plan реализован через TDD без запуска polling;
-- install/config dry-run для `aiogram 3` подготовлен через TDD: dependency declaration, `.env.example`, runbook;
-- `🔴 attention_items` handler реализован через TDD: отдельное сообщение с вариантами-кнопками и результат выбора без кнопок;
-- `smoke_cli.py` интегрирован с `attention_items`: report JSON с `attention_items` превращается в последовательность Telegram-ready payloads, по одному сообщению на каждый `🔴` пункт;
-- callback `attention:<id>:<option>` сохраняет решение, убирает кнопки, блокирует stale/conflicting callbacks и идемпотентно обрабатывает повтор;
-- Telegram attention dispatcher реализован через TDD: показывает `🔴` пункты строго последовательно, редактирует выбранное сообщение без кнопок и только потом отдаёт следующий пункт;
-- Obsidian persistence учитывает параллельный `tg-context-bot`: не изменяет daily notes, `<project>.md`, generic `_index.md` и root `Журнал решений.md`;
-- accepted results сохраняются в `_tg-companion` с отдельной immutable note на `event_id`, atomic write и межпроцессной блокировкой;
-- pending results и attention state могут сохраняться в SQLite вне Vault/Git и переживать перезапуск Hermes Gateway;
-- persisted Hermes wrappers применяют один event внутри `BEGIN IMMEDIATE`; повторный concurrent attention callback становится `duplicate`;
-- Hermes gateway boundary использует уже существующий live metadata-контракт `completion_feedback/task_final` без второго polling consumer;
-- companion bridge установлен и активен в Hermes Gateway; existing `fb:*` callbacks сохраняются durable и не dispatch-ятся повторно после рестарта;
-- real-Vault writes в установленном bridge пока выключены;
-- single-chat live smoke `accept` прошёл через restart-fallback path: один durable decision, один Hermes dispatch, без Vault write;
-- nightly Git checkpoint отделён от Obsidian-аудита и зарегистрирован в Windows Task Scheduler;
-- последний запуск scheduler: `2026-07-02 03:30`, результат `0`, пропущенных запусков нет;
-- локальный `main` и GitHub `origin/main` синхронизированы на `efbca13`;
-- текущая проверка: `93 passed` (`2026-07-03`);
-- durable callback smoke после перезапуска Gateway принят и покрыт тестом: повторный `accept` после restart видит persisted decision, не создаёт дубликат и не пишет в Obsidian при `obsidian_root=None`;
-- отдельный BotFather token пока не подключён;
-- отдельный polling consumer не запускался: bridge использует уже работающий Hermes Telegram polling.
+```text
+111 passed
+Hermes Gateway completion-feedback: 8 passed
+```
 
-## Следующий технический шаг
+Dry-run реального ночного отчёта:
 
-Следующий шаг: подключить `AttentionDispatcher` actions к существующему Hermes Telegram Gateway adapter, чтобы реальные `🔴` пункты уходили отдельными Telegram-сообщениями с inline-кнопками и edit-without-buttons после выбора; затем завершить single-chat live smoke для `revise` и `next`.
+```powershell
+python -m tg_companion_bot.nightly_attention_adapter `
+  --input "C:\AIProjects\Obsidian\One\Проекты\Жизнь\Отчёты ночной оптимизации Obsidian\attention_items_2026-07-10.json" `
+  --chat-id 378157839
+```
+
+Команда не читает token, не consuming updates и не отправляет сообщения.
+
+## Следующий шаг
+
+Подключить output `nightly_attention_adapter` к установленному Hermes Gateway action executor с durable state и последовательной выдачей одного пункта. Активацию реальной отправки и restart Gateway выполнять отдельным подтверждённым шагом.

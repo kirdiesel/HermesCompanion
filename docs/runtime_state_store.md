@@ -10,7 +10,7 @@ Use a local path outside the Obsidian Vault and outside Git, for example:
 C:\Users\<user>\AppData\Local\hermes\tg-companion\runtime.sqlite3
 ```
 
-The database contains no Telegram token or model credential. It stores only minimal pending summaries and decision state already required by the interface.
+The database contains no Telegram token or model credential. It stores only minimal pending summaries and decision state already required by the interface. New companion decision records include `chat_id`; records written before 2026-07-10 remain readable with an empty ownership field.
 
 ## Transaction rule
 
@@ -43,6 +43,9 @@ This serializes concurrent callbacks. A second identical attention callback obse
 - Unauthorized/no-op events do not increment the state revision.
 - WAL and SQLite busy timeout handle short concurrent access.
 - Invalid schema or database failures raise `RuntimeStateStoreError` and must stop action execution.
+- A callback without a pending result is rejected as `stale_companion_result`.
+- A callback whose chat does not own the pending result is rejected as `callback_chat_mismatch`.
+- A consumed `revise`/`next` result remains available until the next result arrives in that chat, then is pruned from pending state.
 
 ## Remaining delivery risk
 

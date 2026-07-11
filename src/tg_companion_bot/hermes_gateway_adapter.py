@@ -162,7 +162,9 @@ def plan_hermes_event(
         callback = handle_callback(event.callback_data)
         if callback.task_id is None:
             return HermesActionPlan(ok=False, error="invalid_companion_callback")
-        runtime = handle_runtime_callback(event.callback_data, state=state)
+        runtime = handle_runtime_callback(event.callback_data, state=state, chat_id=event.chat_id)
+        if runtime.error is not None:
+            return HermesActionPlan(ok=False, error=runtime.error)
         text = runtime.rendered.text if runtime.rendered is not None else f"Статус: {callback.status}"
         if runtime.follow_up:
             text = f"{text}\n\n{runtime.follow_up}"
@@ -178,7 +180,7 @@ def plan_hermes_event(
                 "companion_error": runtime.error,
             },
         )
-        return HermesActionPlan(ok=runtime.error is None, actions=actions, error=runtime.error)
+        return HermesActionPlan(ok=True, actions=actions)
 
     return HermesActionPlan(ok=False, error="unsupported_callback")
 
@@ -268,4 +270,5 @@ def apply_persisted_completion_feedback(
             state=state,
             project=project,
             recommendation=recommendation,
+            chat_id=str(chat_id),
         )

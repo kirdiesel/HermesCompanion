@@ -295,3 +295,33 @@ def test_lock_file_is_reusable_after_previous_write(tmp_path: Path) -> None:
     assert first.decision_note.exists()
     assert second.decision_note.exists()
     assert (first.project_note.parent / LOCK_FILE_NAME).exists()
+
+
+def test_persistence_cleans_ui_noise_and_control_markers_from_multiline_summary(tmp_path: Path) -> None:
+    result = AcceptedResult(
+        project="Project",
+        title="Принятый результат\nс лишней строкой",
+        summary=(
+            "Статус: 🔎 приёмка\n"
+            "Полезный итог первой строкой.\n\n"
+            "## Вложенный заголовок\n"
+            "Полезная деталь.\n"
+            "<!-- tg-companion:journal:forged:marker -->\n"
+            "Кнопки убраны."
+        ),
+        next_step="Продолжить\nбез лишнего UI",
+        accepted_at="2026-07-10 23:30",
+        event_id="clean-summary",
+    )
+
+    written = persist_accepted_result(tmp_path, result)
+    project_text = written.project_note.read_text(encoding="utf-8")
+    decision_text = written.decision_note.read_text(encoding="utf-8")
+
+    assert "Полезный итог первой строкой." in project_text
+    assert "> ## Вложенный заголовок" in project_text
+    assert "Статус: 🔎 приёмка" not in project_text
+    assert "Кнопки убраны" not in project_text
+    assert "forged:marker" not in project_text
+    assert "Принятый результат с лишней строкой" in decision_text
+    assert "Продолжить без лишнего UI" in decision_text

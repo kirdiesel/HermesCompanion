@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, TextIO
@@ -88,7 +90,16 @@ def _save_state(*, state_path: Optional[str], state: RuntimeState) -> None:
     path = Path(state_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = runtime_state_to_dict(state)
-    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+    descriptor, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=True, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 def _state_summary(state: RuntimeState) -> Dict[str, Any]:
@@ -335,7 +346,10 @@ def _persistence_payload(persistence: Any) -> Optional[Dict[str, Any]]:
 
 
 def _is_real_obsidian_root(path: Optional[str]) -> bool:
-    return path is not None and Path(path).resolve() == REAL_OBSIDIAN_ROOT
+    if path is None:
+        return False
+    resolved = Path(path).resolve()
+    return resolved == REAL_OBSIDIAN_ROOT or REAL_OBSIDIAN_ROOT in resolved.parents
 
 
 def _handle_callback_update(
@@ -382,23 +396,30 @@ def _handle_callback_update(
         return True, 2
 
     pending_found = callback_result.task_id in state.pending_results
-    runtime_result = handle_runtime_callback(callback.callback_data, state=state)
+    runtime_result = handle_runtime_callback(
+        callback.callback_data,
+        state=state,
+        chat_id=callback.chat_id,
+    )
     _save_state(state_path=state_path, state=state)
 
     rendered_text = runtime_result.rendered.text if runtime_result.rendered is not None else None
+    successful_or_duplicate = runtime_result.error is None
+    effective_status = callback_result.status if successful_or_duplicate else None
+    effective_remove_keyboard = callback_result.remove_keyboard if successful_or_duplicate else False
     telegram_payload: Dict[str, Any] = {
         "chat_id": _json_chat_id(callback.chat_id),
         "message_id": _json_chat_id(callback.message_id) if callback.message_id else callback.message_id,
-        "text": _callback_payload_text(callback_result.status, runtime_result.follow_up, rendered_text),
+        "text": _callback_payload_text(effective_status, runtime_result.follow_up, rendered_text),
         "parse_mode": None,
         "disable_web_page_preview": True,
     }
-    if callback_result.remove_keyboard:
+    if effective_remove_keyboard:
         telegram_payload["remove_keyboard"] = True
 
     persistence = _persistence_payload(runtime_result.persistence)
     output = {
-        "ok": True,
+        "ok": successful_or_duplicate,
         "mode": "dry_run",
         "source": source,
         "safety": SAFETY,
@@ -407,8 +428,8 @@ def _handle_callback_update(
         "callback_result": {
             "task_id": callback_result.task_id,
             "action": runtime_result.action.value if runtime_result.action is not None else None,
-            "status": callback_result.status,
-            "remove_keyboard": callback_result.remove_keyboard,
+            "status": effective_status,
+            "remove_keyboard": effective_remove_keyboard,
             "next_intent": callback_result.next_intent,
             "follow_up": runtime_result.follow_up,
             "pending_result_found": pending_found,
@@ -430,7 +451,7 @@ def _handle_callback_update(
         "state": _state_summary(state),
     }
     _write_json(output)
-    return True, 0
+    return True, 0 if successful_or_duplicate else 2
 
 
 def run_smoke_cli(argv: Optional[Iterable[str]] = None, *, stdin: TextIO = sys.stdin) -> int:

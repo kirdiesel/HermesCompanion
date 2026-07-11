@@ -18,7 +18,7 @@ def test_attention_item_renders_as_separate_message_with_decision_buttons():
         path="C:/AIProjects/Obsidian/One/draft.md",
         reason="Черновик выглядит устаревшим",
         risk="Можно потерять полезный контекст",
-        recommended_option="archive",
+        recommended_option="accept",
         decision_options=(
             DecisionOption(id="accept", label="Принять предложение", effect="Архивировать черновик"),
             DecisionOption(id="keep", label="Оставить как есть", effect="Ничего не менять"),
@@ -31,6 +31,8 @@ def test_attention_item_renders_as_separate_message_with_decision_buttons():
     assert payload.text.startswith("🔴 Требует внимания: Решить судьбу черновика next_codex_steps")
     assert "Путь: C:/AIProjects/Obsidian/One/draft.md" in payload.text
     assert "Риск: Можно потерять полезный контекст" in payload.text
+    assert "Рекомендация: Принять предложение" in payload.text
+    assert "- Архивировать" not in payload.text
     assert payload.reply_markup == {
         "inline_keyboard": [
             [{"text": "Принять предложение", "callback_data": "attention:obsidian-review-001:accept"}],
@@ -83,7 +85,7 @@ def test_apply_attention_decision_removes_buttons_and_records_choice():
     assert result.selected_label == "Оставить как есть"
     assert result.payload.reply_markup is None
     assert "✅ Решение принято: Оставить как есть" in result.payload.text
-    assert "кнопки убраны" in result.payload.text.lower()
+    assert "кноп" not in result.payload.text.lower()
 
 
 def test_unknown_attention_decision_is_safe_noop_without_buttons():
@@ -124,3 +126,4 @@ def test_recorded_decision_payload_is_idempotent_without_buttons():
 
     assert duplicate_payload.reply_markup is None
     assert "уже было принято" in duplicate_payload.text
+    assert "кноп" not in duplicate_payload.text.lower()
