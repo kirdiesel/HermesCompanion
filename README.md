@@ -21,6 +21,8 @@ Telegram-интерфейс для цикла:
 - Реальный nightly Obsidian report преобразуется в Telegram-ready attention items без token и отправки.
 - Интерфейсный профиль и готовый prompt для переноса в другой Hermes One вынесены отдельно.
 - Ночной Git checkpoint проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
+- Локальный phase-0 контур для утренней сводки и дневной дельты уже реализован: строгий envelope, точное объединение, атомарный spool и durable outbox проверены только на fake sender.
+- В installed Hermes на диск установлен тонкий proactive adapter с lifecycle hooks; отдельный флаг по умолчанию выключен, а текущий процесс не перезапускался.
 
 ## Что пока не работает live
 
@@ -30,6 +32,7 @@ Telegram-интерфейс для цикла:
 - Надёжная маршрутизация результата в конкретный проект отсутствует; fallback остаётся `Inbox`.
 - Ежемесячный ChatGPT export пока передаётся и импортируется вручную.
 - Standalone `aiogram`-бот не реализован; это отложенный reference adapter, а не текущий runtime.
+- Proactive delivery ещё не активна: `HERMES_TG_COMPANION_PROACTIVE_ENABLED` не задан, текущий Gateway работает со старым загруженным кодом, automation-производители пока не пишут envelope в spool и Telegram-сообщения не отправлялись.
 
 ## Важное разграничение
 
@@ -76,6 +79,14 @@ Telegram-интерфейс для цикла:
 - `nightly_attention_adapter.py`: реальный nightly JSON -> canonical attention items.
 - `smoke_cli.py`: Windows-safe end-to-end dry-run без token/polling/send.
 - `scripts/nightly_git_checkpoint.py`: deterministic nightly Git flow.
+- `companion_envelope.py`: строгий `CompanionEnvelope v1`, ограничения и canonical identity.
+- `proactive_runtime.py`: объединение и безопасный рендер сводки/дельты без кнопок.
+- `delivery_outbox.py`: отдельные SQLite intake/revision/batch/outbox и атомарный spool.
+- `proactive_pipeline.py`: локальный spool -> validation -> batch -> fake-sender-ready outbox.
+- `hermes_proactive_worker.py`: bounded async spool/batch/outbox worker с trusted chat boundary и conservative retry/uncertain policy.
+- `integration/hermes_gateway/companion_bridge.py`: canonical default-off bridge-template для installed Gateway.
+
+Описание границ phase 0: `docs/proactive_foundation_phase0.md`.
 
 ## Перенос интерфейса
 
@@ -90,15 +101,16 @@ Renderer принимает другой `InteractionProfile`, поэтому la
 ## Проверка
 
 ```powershell
-python -m compileall -q src scripts
+python -m compileall -q src integration scripts
 python -m pytest -q
 ```
 
-Проверено 10 июля 2026 года:
+Проверено 21 июля 2026 года:
 
 ```text
-111 passed
-Hermes Gateway completion-feedback: 8 passed
+179 passed
+Hermes Gateway selected offline regressions: 21 passed
+Hermes proactive lifecycle mock: passed
 ```
 
 Dry-run реального ночного отчёта:
@@ -113,4 +125,4 @@ python -m tg_companion_bot.nightly_attention_adapter `
 
 ## Следующий шаг
 
-Подключить output `nightly_attention_adapter` к установленному Hermes Gateway action executor с durable state и последовательной выдачей одного пункта. Активацию реальной отправки и restart Gateway выполнять отдельным подтверждённым шагом.
+Следующий отдельный gate — перезапустить Gateway при всё ещё выключенном proactive-флаге и проверить только чистый startup/shutdown. Включение флага, один live smoke, изменение automation-расписаний и live nightly attention остаются раздельными согласованиями.
