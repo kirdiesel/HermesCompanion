@@ -20,7 +20,8 @@ Telegram-интерфейс для цикла:
 - Запись в общий Vault изолирована в `03_Проекты/Активные/<project>/_tg-companion` и защищена lock + atomic replace.
 - Реальный nightly Obsidian report преобразуется в Telegram-ready attention items без token и отправки.
 - Интерфейсный профиль и готовый prompt для переноса в другой Hermes One вынесены отдельно.
-- Ночной Git checkpoint проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
+- Ночной Git checkpoint в `04:00` проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
+- Месячный экспорт ChatGPT управляется сохраняемым state machine: официальный запрос уже подтверждён, watcher ожидает ready-email и продолжит импорт после включения ПК.
 - Локальный phase-0 контур для утренней сводки и дневной дельты уже реализован: строгий envelope, точное объединение, атомарный spool и durable outbox проверены только на fake sender.
 - В installed Hermes на диск установлен тонкий proactive adapter с lifecycle hooks; отдельный флаг по умолчанию выключен, а текущий процесс не перезапускался.
 
@@ -30,7 +31,7 @@ Telegram-интерфейс для цикла:
 - `revise` и `next` не прошли отдельный live smoke после установки durable bridge.
 - Accepted results не пишутся в реальный Vault: `HERMES_TG_COMPANION_OBSIDIAN_ROOT` не задан.
 - Надёжная маршрутизация результата в конкретный проект отсутствует; fallback остаётся `Inbox`.
-- Ежемесячный ChatGPT export пока передаётся и импортируется вручную.
+- Первый полный автоматизированный цикл ChatGPT export ещё не завершён: OpenAI пока не прислал ready-email для текущего запроса.
 - Standalone `aiogram`-бот не реализован; это отложенный reference adapter, а не текущий runtime.
 - Proactive delivery ещё не активна: `HERMES_TG_COMPANION_PROACTIVE_ENABLED` не задан, текущий Gateway работает со старым загруженным кодом, automation-производители пока не пишут envelope в spool и Telegram-сообщения не отправлялись.
 
@@ -38,8 +39,10 @@ Telegram-интерфейс для цикла:
 
 Ночная оптимизация Obsidian выполняется внешними Hermes-задачами:
 
-- `nightly-obsidian-structure-optimizer` в 03:00: локальный детерминированный аудит;
+- `nightly-obsidian-structure-optimizer` в 03:15: локальный детерминированный аудит и rolling-обзор;
 - `nightly-obsidian-semantic-review` в 03:30: необязательный AI-обзор.
+- Windows-задача `Hermes_Obsidian_Catchup` после входа и в 06:00 выполняет ровно
+  один пропущенный цикл за текущую дату; пропущенные дни задним числом не создаёт.
 
 `tg-companion-bot` не оптимизирует Vault сам. Его роль в этом контуре: превратить спорные пункты аудита в короткие Telegram-решения с кнопками и сохранить выбор.
 

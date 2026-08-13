@@ -1,6 +1,6 @@
 # Статус `tg-companion-bot`
 
-Дата аудита: `2026-07-10`.
+Дата аудита: `2026-08-11`.
 
 ## Итог
 
@@ -24,7 +24,7 @@ Telegram пользователя
 Ночная оптимизация является соседней системой:
 
 ```text
-03:00 local Obsidian audit
+03:15 local Obsidian audit
   -> Markdown report + attention_items JSON
 03:30 optional AI semantic review
   -> semantic Markdown report
@@ -48,7 +48,7 @@ tg-companion
 | Ночные спорные пункты с кнопками | Adapter готов; live delivery не подключён |
 | Недельное подавление повторных noncritical-вопросов | Реализовано в weekly attention IDs |
 | Перенос способа общения одним prompt | Реализовано в `interaction_profile.py` и `docs/hermes_one_interface_prompt.md` |
-| Ежемесячный ChatGPT export | Raw import существует; регулярный intake не автоматизирован |
+| Ежемесячный ChatGPT export | State machine и requester/watcher активны; первый ready-email ещё ожидается |
 | Минимум «воды» | Core уплотнён; качество самих Hermes-ответов ещё не измеряется |
 | Ночной Git commit/push | Windows task работает, последний результат 0 |
 
@@ -70,14 +70,13 @@ tg-companion
 
 ## Проверки
 
-- Project suite, системный Python: `111 passed`.
-- Project suite, Hermes venv: `111 passed`.
+- Project suite: `179 passed`.
 - Hermes Gateway completion-feedback suite: `8 passed`.
 - `compileall`: проходит.
 - Реальный `attention_items_2026-07-10.json`: dry-run успешно создал 2 Telegram payload без token/send.
 - Hermes bridge log: активирован с `real Vault writes: False`.
 - Runtime SQLite: schema 1, revision 2, 0 pending results, 2 accepted decisions до текущих правок.
-- Windows task `HermesCompanion Nightly Git Checkpoint`: запуск 2026-07-10 03:30, result 0.
+- Windows task `HermesCompanion Nightly Git Checkpoint`: последний запуск 2026-08-11, result 0; следующий запуск в 04:00.
 
 Backup перед правками:
 
@@ -88,19 +87,19 @@ C:\AIProjects\Backups\tg-companion-bot-comprehensive-audit-20260710-232123
 ## Критические ограничения
 
 - В реальном Vault одновременно существуют `Проекты` и канонический `03_Проекты`; companion пишет только в `03_Проекты`.
-- `tg-context-bot` не является Git-репозиторием в проверенном пути и может параллельно изменяться другим агентом; его файлы в этом цикле не менялись.
+- `tg-context-bot` не является Git-репозиторием; изменения этого цикла сохранены в отдельном post-implementation backup, но ещё не имеют Git history.
 - У `tg-context-bot` и companion нет общего cross-writer lock, поэтому они обязаны сохранять непересекающееся ownership файлов.
 - Нет delivery outbox между SQLite commit и Telegram API.
 - Standalone `aiogram` entrypoint отсутствует, `aiogram` в проверенных Python runtimes не установлен.
 - Отдельный token не читался и не изменялся; текущий live interface использует token существующего Hermes Gateway.
-- При выключенном ПК cron, Gateway и Windows task не выполняются.
+- При выключенном ПК процессы не выполняются. После входа экспорт продолжится по state, Git checkpoint имеет `StartWhenAvailable`, а Obsidian получит один catch-up за текущую дату.
 
 ## Оптимальный порядок продолжения
 
 1. Подключить nightly attention adapter к Hermes Gateway без изменения cron-логики и провести один подтверждённый send/edit callback smoke.
 2. Провести live smoke `revise` и `next` с real Vault выключенным.
 3. Добавить явный project routing; только затем включить одну принятую запись в real Vault и проверить отсутствие изменений в файлах `tg-context-bot`.
-4. Создать monthly ChatGPT import inbox + manifest; semantic extraction запускать после появления нового export, а не по пустому расписанию.
+4. Завершить первый текущий ChatGPT intake после ready-email и проверить реальные semantic-кнопки ContextBot.
 5. После двух недель использования оценить агрегаты interaction quality и только по фактам решать, нужен ли standalone bot или outbox.
 
 Этот порядок критичен: включение real Vault до project routing создаст аккуратные, но неправильно классифицированные записи в `Inbox`; standalone polling сейчас добавит второй runtime без новой пользовательской ценности.
