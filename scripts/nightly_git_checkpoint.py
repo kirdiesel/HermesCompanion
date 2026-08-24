@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -37,6 +38,29 @@ def run_command(args: Sequence[str], *, cwd: Path) -> CommandResult:
         check=False,
     )
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+def filesystem_path(path: Path) -> str:
+    resolved = str(path.resolve())
+    if os.name == "nt" and not resolved.startswith("\\\\?\\"):
+        return f"\\\\?\\{resolved}"
+    return resolved
+
+
+def cleanup_empty_root_nul(repo: Path, *, execute: bool) -> str:
+    candidate = filesystem_path(repo / "NUL")
+    try:
+        metadata = os.stat(candidate)
+    except FileNotFoundError:
+        return "not_present"
+    if not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError("root NUL path is not a regular file; refusing automatic cleanup")
+    if metadata.st_size != 0:
+        raise RuntimeError("root NUL file is not empty; refusing automatic cleanup")
+    if not execute:
+        return "would_remove"
+    os.unlink(candidate)
+    return "removed"
 
 
 def git_paths(repo: Path) -> list[str]:
@@ -84,6 +108,24 @@ def remote_push_required(local_head: str, remote_result: CommandResult) -> bool:
     return remote_head != local_head
 
 
+def write_checkpoint_status(path: Path, result: dict[str, object]) -> None:
+    payload = {
+        "schema_version": 1,
+        "run_at": datetime.now().astimezone().isoformat(),
+        "status": "ok" if result.get("ok") else "error",
+        "mode": result.get("mode", ""),
+        "error": result.get("error", ""),
+        "detail": result.get("detail", ""),
+        "committed": bool(result.get("committed")),
+        "pushed": bool(result.get("pushed")),
+        "root_nul_cleanup": result.get("root_nul_cleanup", "not_checked"),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
 def _require_success(result: CommandResult, label: str) -> None:
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
@@ -94,6 +136,9 @@ def run_checkpoint(repo: Path, *, execute: bool, message: str | None = None) -> 
     repo = repo.resolve()
     if not (repo / ".git").exists():
         raise RuntimeError(f"not a git repository: {repo}")
+
+    cleanup_mode = execute and writes_allowed(execute=True)
+    nul_cleanup = cleanup_empty_root_nul(repo, execute=cleanup_mode)
 
     status = run_command(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=repo)
     _require_success(status, "git status")
@@ -140,6 +185,7 @@ def run_checkpoint(repo: Path, *, execute: bool, message: str | None = None) -> 
         "branch": branch,
         "origin_configured": True,
         "changed_paths": changed_paths,
+        "root_nul_cleanup": nul_cleanup,
         "checks": {"secret_scan": "passed", "py_compile": "passed", "pytest": "passed"},
         "would_commit": bool(changed_paths),
         "would_push": bool(changed_paths) or needs_push,
@@ -187,12 +233,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--repo", default=".", help="Repository path. Defaults to current directory.")
     parser.add_argument("--execute", action="store_true", help="Enable commit/push when the environment gate is open.")
     parser.add_argument("--message", help="Optional commit message for execute mode.")
+    parser.add_argument(
+        "--status-file",
+        default="logs/nightly_git_checkpoint_status.json",
+        help="Machine-readable status file, relative to the repository by default.",
+    )
     args = parser.parse_args(argv)
+    repo = Path(args.repo).resolve()
 
     try:
-        result = run_checkpoint(Path(args.repo), execute=args.execute, message=args.message)
+        result = run_checkpoint(repo, execute=args.execute, message=args.message)
     except Exception as exc:  # pragma: no cover - command-level guard
         result = {"ok": False, "mode": "execute" if args.execute else "dry_run", "error": "checkpoint_failed", "detail": str(exc)}
+    status_path = Path(args.status_file)
+    if not status_path.is_absolute():
+        status_path = repo / status_path
+    try:
+        write_checkpoint_status(status_path, result)
+    except Exception as exc:  # pragma: no cover - command-level guard
+        result = {
+            "ok": False,
+            "mode": "execute" if args.execute else "dry_run",
+            "error": "status_write_failed",
+            "detail": str(exc),
+        }
     print(json.dumps(result, ensure_ascii=True))
     return 0 if result.get("ok") else 2
 

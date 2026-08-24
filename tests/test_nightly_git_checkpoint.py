@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -61,3 +62,43 @@ def test_remote_push_required_retries_missing_or_different_remote_head():
     assert MODULE.remote_push_required("abc123", missing) is True
     assert MODULE.remote_push_required("abc123", same) is False
     assert MODULE.remote_push_required("abc123", different) is True
+
+
+def test_empty_root_nul_cleanup_is_gated_and_idempotent(tmp_path):
+    raw_path = MODULE.filesystem_path(tmp_path / "NUL")
+    with open(raw_path, "wb"):
+        pass
+
+    assert MODULE.cleanup_empty_root_nul(tmp_path, execute=False) == "would_remove"
+    assert os.path.exists(raw_path)
+    assert MODULE.cleanup_empty_root_nul(tmp_path, execute=True) == "removed"
+    assert MODULE.cleanup_empty_root_nul(tmp_path, execute=True) == "not_present"
+
+
+def test_nonempty_root_nul_is_never_removed(tmp_path):
+    raw_path = MODULE.filesystem_path(tmp_path / "NUL")
+    with open(raw_path, "wb") as handle:
+        handle.write(b"keep")
+
+    try:
+        MODULE.cleanup_empty_root_nul(tmp_path, execute=True)
+    except RuntimeError as exc:
+        assert "not empty" in str(exc)
+    else:
+        raise AssertionError("non-empty NUL file must fail closed")
+    assert os.path.getsize(raw_path) == 4
+
+
+def test_checkpoint_status_is_machine_readable(tmp_path):
+    status_path = tmp_path / "logs" / "status.json"
+
+    MODULE.write_checkpoint_status(
+        status_path,
+        {"ok": True, "committed": True, "pushed": True, "root_nul_cleanup": "removed"},
+    )
+
+    payload = __import__("json").loads(status_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "ok"
+    assert payload["committed"] is True
+    assert payload["pushed"] is True
+    assert payload["root_nul_cleanup"] == "removed"
