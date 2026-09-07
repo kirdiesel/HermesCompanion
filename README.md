@@ -20,7 +20,7 @@ Telegram-интерфейс для цикла:
 - Запись в общий Vault изолирована в `03_Проекты/Активные/<project>/_tg-companion` и защищена lock + atomic replace.
 - Реальный nightly Obsidian report преобразуется в Telegram-ready attention items без token и отправки.
 - Интерфейсный профиль и готовый prompt для переноса в другой Hermes One вынесены отдельно.
-- Ночной Git checkpoint в `04:00` проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
+- Вечерний Git checkpoint в `21:00` проверяет секреты, компиляцию и тесты, затем при необходимости commit/push.
 - Месячный экспорт ChatGPT управляется сохраняемым state machine: официальный запрос уже подтверждён, watcher ожидает ready-email и продолжит импорт после включения ПК.
 - Локальный phase-0 контур для утренней сводки и дневной дельты уже реализован: строгий envelope, точное объединение, атомарный spool и durable outbox проверены только на fake sender.
 - В installed Hermes на диск установлен тонкий proactive adapter с lifecycle hooks; отдельный флаг по умолчанию выключен, а текущий процесс не перезапускался.
@@ -39,8 +39,8 @@ Telegram-интерфейс для цикла:
 
 Ночная оптимизация Obsidian выполняется внешними Hermes-задачами:
 
-- `nightly-obsidian-structure-optimizer` в 03:15: локальный детерминированный аудит и rolling-обзор;
-- `nightly-obsidian-semantic-review` в 03:30: необязательный AI-обзор.
+- `nightly-obsidian-structure-optimizer` в 06:10: локальный детерминированный аудит и rolling-обзор;
+- `nightly-obsidian-semantic-review` в 06:15: необязательный AI-обзор.
 - Windows-задача `Hermes_Obsidian_Catchup` после входа и в 06:00 выполняет ровно
   один пропущенный цикл за текущую дату; пропущенные дни задним числом не создаёт.
 
