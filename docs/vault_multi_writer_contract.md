@@ -2,6 +2,8 @@
 
 `C:\AIProjects\Obsidian\One` is a shared Vault. A writer must own explicit files or a namespace; access to the same Vault root does not imply ownership of every note.
 
+System-wide authority and cross-writer rules are defined in `C:\AIProjects\Obsidian\One\06_Контекст для ИИ\WRITER_OWNERSHIP.md`. This document is the CompanionBot-specific persistence contract and must remain compatible with that system contract.
+
 ## Current ownership
 
 ### `tg-context-bot`
